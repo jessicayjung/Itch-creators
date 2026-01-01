@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>itch.io - newest games</title>
+    <link>https://itch.io/games</link>
+    <description>itch.io newest games</description>
+
+    <item>
+      <title>Cool Adventure Game</title>
+      <link>https://testdev.itch.io/cool-adventure</link>
+      <description>An exciting adventure game</description>
+      <pubDate>Mon, 01 Jan 2024 12:00:00 GMT</pubDate>
+    </item>
+
+    <item>
+      <title>Puzzle Master</title>
+      <link>https://puzzleguru.itch.io/puzzle-master</link>
+      <description>A challenging puzzle game</description>
+      <pubDate>Tue, 02 Jan 2024 15:30:00 GMT</pubDate>
+    </item>
+
+    <item>
+      <title>Space Shooter</title>
+      <link>https://gamerdev.itch.io/space-shooter</link>
+      <description>Fast-paced space action</description>
+      <pubDate>Wed, 03 Jan 2024 09:15:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
