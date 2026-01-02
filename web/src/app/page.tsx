@@ -88,7 +88,8 @@ export default async function Home({ searchParams }: PageProps) {
       </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+          <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
               <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-16">
@@ -165,6 +166,7 @@ export default async function Home({ searchParams }: PageProps) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {creators.length === 0 && (

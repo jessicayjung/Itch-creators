@@ -26,8 +26,10 @@ def enrich_game(game: Game) -> bool:
     # Parse ratings from page
     rating_data = game_parser.parse_game(html)
 
-    # Detect if ratings are hidden (no rating and no rating count)
-    ratings_hidden = rating_data["rating"] is None and rating_data["rating_count"] == 0
+    # Detect if ratings are hidden or parse failed
+    # Case 1: No rating and no rating count = truly hidden/disabled ratings
+    # Case 2: No rating but has rating count = parse failure, should retry
+    ratings_hidden = rating_data["rating"] is None
 
     # Update in database
     db.update_game_ratings(

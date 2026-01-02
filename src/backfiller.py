@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime
+from urllib.parse import urljoin
 
 from . import db
 from .http_client import fetch
@@ -30,27 +31,41 @@ def backfill_creator(creator: Creator) -> int:
         Exception: If profile fetching fails
     """
     inserted_count = 0
+    pages_parsed = 0
     current_url = creator.profile_url
+    visited_urls = set()
 
     for _ in range(_MAX_PAGES_PER_CREATOR):
+        # Check for pagination loop
+        if current_url in visited_urls:
+            break
+
+        visited_urls.add(current_url)
+
         # Fetch the current profile page
         html = fetch(current_url)
 
         # Parse games and get next page URL
         games, next_url = profile.parse_profile(html)
 
+        # Increment pages parsed (even if no games)
+        pages_parsed += 1
+
         # Insert games into database
         for game_data in games:
+            # Resolve relative game URL to absolute
+            game_url = urljoin(current_url, game_data["url"])
+
             # Extract itch_id from URL
             # Example: https://testdev.itch.io/cool-game -> cool-game
-            itch_id = _extract_game_id(game_data["url"])
+            itch_id = _extract_game_id(game_url)
 
             game = Game(
                 id=None,
                 itch_id=itch_id,
                 title=game_data["title"],
                 creator_name=creator.name,
-                url=game_data["url"],
+                url=game_url,
                 publish_date=game_data["publish_date"].date() if game_data["publish_date"] else None,
                 rating=None,
                 rating_count=0,
@@ -67,10 +82,12 @@ def backfill_creator(creator: Creator) -> int:
         if not next_url:
             break
 
-        current_url = next_url
+        # Resolve relative next_url to absolute
+        current_url = urljoin(current_url, next_url)
 
-    # Mark creator as backfilled
-    db.mark_creator_backfilled(creator.id)
+    # Mark creator as backfilled ONLY if at least one page was parsed
+    if pages_parsed > 0:
+        db.mark_creator_backfilled(creator.id)
 
     return inserted_count
 

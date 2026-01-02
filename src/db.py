@@ -69,7 +69,7 @@ def create_tables() -> None:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id SERIAL PRIMARY KEY,
-                itch_id VARCHAR(255) UNIQUE,
+                itch_id VARCHAR(255),
                 title VARCHAR(512) NOT NULL,
                 creator_id INTEGER REFERENCES creators(id),
                 url VARCHAR(512) NOT NULL,
@@ -81,7 +81,8 @@ def create_tables() -> None:
                 ratings_hidden_until TIMESTAMP,
                 comment_count INTEGER DEFAULT 0,
                 description TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(creator_id, itch_id)
             )
         """)
 
@@ -98,6 +99,36 @@ def create_tables() -> None:
         cursor.execute("""
             ALTER TABLE games ADD COLUMN IF NOT EXISTS description TEXT
         """)
+
+        # Migrate from old UNIQUE constraint to composite constraint
+        # Check if old constraint exists and drop it
+        cursor.execute("""
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE table_name = 'games'
+            AND constraint_type = 'UNIQUE'
+            AND constraint_name LIKE '%itch_id%'
+        """)
+        old_constraint = cursor.fetchone()
+        if old_constraint:
+            constraint_name = old_constraint[0]
+            cursor.execute(f"""
+                ALTER TABLE games DROP CONSTRAINT IF EXISTS {constraint_name}
+            """)
+
+        # Add new composite unique constraint if it doesn't exist
+        cursor.execute("""
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE table_name = 'games'
+            AND constraint_type = 'UNIQUE'
+            AND constraint_name = 'games_creator_id_itch_id_key'
+        """)
+        new_constraint = cursor.fetchone()
+        if not new_constraint:
+            cursor.execute("""
+                ALTER TABLE games ADD CONSTRAINT games_creator_id_itch_id_key UNIQUE(creator_id, itch_id)
+            """)
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS creator_scores (
@@ -167,7 +198,7 @@ def insert_game(game: Game) -> int:
                 rating, rating_count, scraped_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (itch_id) DO UPDATE SET
+            ON CONFLICT (creator_id, itch_id) DO UPDATE SET
                 title = CASE WHEN EXCLUDED.title != '' THEN EXCLUDED.title ELSE games.title END,
                 publish_date = COALESCE(EXCLUDED.publish_date, games.publish_date)
             RETURNING id
@@ -185,7 +216,10 @@ def insert_game(game: Game) -> int:
 
         # If conflict occurred, fetch existing ID
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM games WHERE itch_id = %s", (game.itch_id,))
+        cursor.execute(
+            "SELECT id FROM games WHERE creator_id = %s AND itch_id = %s",
+            (creator_id, game.itch_id)
+        )
         result = cursor.fetchone()
         cursor.close()
         return result[0] if result else None
