@@ -45,5 +45,8 @@ jobs:
       - name: Enrich game data (ratings, descriptions)
         run: python -m src.main enrich
 
+      - name: Re-enrich stale games (update ratings for games older than 7 days)
+        run: python -m src.main re-enrich --days 7 --limit 500
+
       - name: Calculate creator scores
         run: python -m src.main score

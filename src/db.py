@@ -301,6 +301,42 @@ def get_unenriched_games() -> list[Game]:
         ]
 
 
+def get_stale_games(days_old: int = 7, limit: int = 500) -> list[Game]:
+    """Fetch games that were enriched more than X days ago and need refreshing."""
+    with get_connection() as conn:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT g.*, c.name as creator_name
+            FROM games g
+            LEFT JOIN creators c ON g.creator_id = c.id
+            WHERE g.scraped_at IS NOT NULL
+              AND g.scraped_at < NOW() - INTERVAL '%s days'
+              AND g.ratings_hidden = FALSE
+            ORDER BY g.scraped_at ASC
+            LIMIT %s
+        """, (days_old, limit))
+        rows = cursor.fetchall()
+        cursor.close()
+
+        return [
+            Game(
+                id=row["id"],
+                itch_id=row["itch_id"],
+                title=row["title"],
+                creator_name=row["creator_name"] if row["creator_name"] else "unknown",
+                url=row["url"],
+                publish_date=row["publish_date"],
+                rating=float(row["rating"]) if row["rating"] is not None else None,
+                rating_count=row["rating_count"],
+                comment_count=row["comment_count"] if row["comment_count"] is not None else 0,
+                description=row["description"],
+                tags=list(row["tags"]) if row["tags"] else None,
+                scraped_at=row["scraped_at"]
+            )
+            for row in rows
+        ]
+
+
 def update_game_ratings(
     game_id: int,
     rating: float | None,

@@ -70,3 +70,33 @@ def enrich_all() -> dict[str, int]:
             log_error_with_context(logger, "Enrich", f"{game.title} ({game.url})", e)
 
     return stats
+
+
+def re_enrich_stale(days_old: int = 7, limit: int = 500) -> dict[str, int]:
+    """
+    Re-enrich games that haven't been updated in X days.
+
+    Args:
+        days_old: Re-enrich games older than this many days
+        limit: Maximum games to process per run
+
+    Returns:
+        Dictionary with stats: {games_processed, errors}
+    """
+    stats = {
+        "games_processed": 0,
+        "errors": 0,
+    }
+
+    games = db.get_stale_games(days_old=days_old, limit=limit)
+    logger.info(f"Found {len(games)} stale games to re-enrich")
+
+    for game in games:
+        try:
+            enrich_game(game)
+            stats["games_processed"] += 1
+        except Exception as e:
+            stats["errors"] += 1
+            log_error_with_context(logger, "Re-enrich", f"{game.title} ({game.url})", e)
+
+    return stats

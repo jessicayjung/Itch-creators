@@ -93,6 +93,17 @@ def cmd_enrich(args):
     logger.info(f"Results: games_processed={stats['games_processed']}, errors={stats['errors']}")
 
 
+def cmd_re_enrich(args):
+    """Re-enrich stale games to update ratings and data."""
+    days = getattr(args, 'days', 7)
+    limit = getattr(args, 'limit', 500)
+
+    with LogContext(logger, f"Re-enriching games older than {days} days"):
+        stats = enricher.re_enrich_stale(days_old=days, limit=limit)
+
+    logger.info(f"Results: games_processed={stats['games_processed']}, errors={stats['errors']}")
+
+
 def cmd_score(args):
     """Recalculate creator scores."""
     with LogContext(logger, "Calculating creator scores"):
@@ -241,6 +252,11 @@ def main():
     discover_parser = subparsers.add_parser("discover", help="Discover creators from browse pages")
     discover_parser.add_argument("--pages", type=int, default=2, help="Pages to scrape per source (default: 2)")
 
+    # re-enrich command
+    re_enrich_parser = subparsers.add_parser("re-enrich", help="Re-enrich stale games to update ratings")
+    re_enrich_parser.add_argument("--days", type=int, default=7, help="Re-enrich games older than X days (default: 7)")
+    re_enrich_parser.add_argument("--limit", type=int, default=500, help="Max games to process per run (default: 500)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -253,6 +269,7 @@ def main():
         "poll": cmd_poll,
         "backfill": cmd_backfill,
         "enrich": cmd_enrich,
+        "re-enrich": cmd_re_enrich,
         "score": cmd_score,
         "run": cmd_run,
         "seed": cmd_seed,
