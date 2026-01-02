@@ -57,6 +57,7 @@ def test_enrich_game(sample_game, sample_game_html):
             game_id=1,
             rating=4.5,
             rating_count=150,
+            comment_count=0,
             ratings_hidden=False
         )
 
@@ -77,6 +78,7 @@ def test_enrich_game_no_ratings(sample_game, sample_game_no_ratings_html):
             game_id=1,
             rating=None,
             rating_count=0,
+            comment_count=0,
             ratings_hidden=True
         )
 

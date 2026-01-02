@@ -57,9 +57,9 @@ def test_score_creator():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # Mock query result: (total_games, rated_games, total_ratings, weighted_rating_sum)
-        # 10 games, 8 rated, 500 total ratings, weighted sum = 4.2 * 500 = 2100
-        mock_cursor.fetchone.return_value = (10, 8, 500, 2100.0)
+        # Mock query result: (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        # 10 games, 8 rated, 500 total ratings, weighted sum = 4.2 * 500 = 2100, 50 comments
+        mock_cursor.fetchone.return_value = (10, 8, 500, 2100.0, 50)
 
         result = score_creator(creator_id=1)
 
@@ -84,8 +84,8 @@ def test_score_creator_no_games():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # No games: (total_games, rated_games, total_ratings, weighted_rating_sum)
-        mock_cursor.fetchone.return_value = (0, 0, 0, 0.0)
+        # No games: (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        mock_cursor.fetchone.return_value = (0, 0, 0, 0.0, 0)
 
         result = score_creator(creator_id=1)
 
@@ -105,9 +105,9 @@ def test_score_creator_few_ratings():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # (total_games, rated_games, total_ratings, weighted_rating_sum)
-        # 2 games, 2 rated, 5 total ratings, weighted sum = 5.0 * 5 = 25
-        mock_cursor.fetchone.return_value = (2, 2, 5, 25.0)
+        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        # 2 games, 2 rated, 5 total ratings, weighted sum = 5.0 * 5 = 25, 0 comments
+        mock_cursor.fetchone.return_value = (2, 2, 5, 25.0, 0)
 
         result = score_creator(creator_id=1)
 
@@ -200,9 +200,9 @@ def test_score_creator_rounds_correctly():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # (total_games, rated_games, total_ratings, weighted_rating_sum)
-        # 5 games, 5 rated, 25 ratings, weighted sum = 4.123456 * 25 = 103.0864
-        mock_cursor.fetchone.return_value = (5, 5, 25, 103.0864)
+        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        # 5 games, 5 rated, 25 ratings, weighted sum = 4.123456 * 25 = 103.0864, 0 comments
+        mock_cursor.fetchone.return_value = (5, 5, 25, 103.0864, 0)
 
         result = score_creator(creator_id=1)
 
@@ -222,8 +222,8 @@ def test_game_count_bonus_applied():
         mock_conn.cursor.return_value = mock_cursor
 
         # Creator with 3 games: should get 1.02^2 = 1.0404 bonus
-        # (total_games, rated_games, total_ratings, weighted_rating_sum)
-        mock_cursor.fetchone.return_value = (3, 3, 100, 400.0)  # avg = 4.0
+        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        mock_cursor.fetchone.return_value = (3, 3, 100, 400.0, 0)  # avg = 4.0, 0 comments
 
         result = score_creator(creator_id=1)
 
@@ -247,7 +247,8 @@ def test_game_count_bonus_capped():
         mock_conn.cursor.return_value = mock_cursor
 
         # Creator with 20 games: 1.02^19 = 1.456, but should cap at 1.10
-        mock_cursor.fetchone.return_value = (20, 20, 200, 800.0)  # avg = 4.0
+        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        mock_cursor.fetchone.return_value = (20, 20, 200, 800.0, 0)  # avg = 4.0, 0 comments
 
         result = score_creator(creator_id=1)
 
@@ -272,7 +273,8 @@ def test_single_game_no_bonus():
         mock_conn.cursor.return_value = mock_cursor
 
         # Creator with 1 game: no bonus applied
-        mock_cursor.fetchone.return_value = (1, 1, 50, 200.0)  # avg = 4.0
+        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
+        mock_cursor.fetchone.return_value = (1, 1, 50, 200.0, 0)  # avg = 4.0, 0 comments
 
         result = score_creator(creator_id=1)
 

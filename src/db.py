@@ -79,6 +79,7 @@ def create_tables() -> None:
                 scraped_at TIMESTAMP,
                 ratings_hidden BOOLEAN DEFAULT FALSE,
                 ratings_hidden_until TIMESTAMP,
+                comment_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -89,6 +90,9 @@ def create_tables() -> None:
         """)
         cursor.execute("""
             ALTER TABLE games ADD COLUMN IF NOT EXISTS ratings_hidden_until TIMESTAMP
+        """)
+        cursor.execute("""
+            ALTER TABLE games ADD COLUMN IF NOT EXISTS comment_count INTEGER DEFAULT 0
         """)
 
         cursor.execute("""
@@ -255,37 +259,41 @@ def update_game_ratings(
     game_id: int,
     rating: float | None,
     rating_count: int,
+    comment_count: int = 0,
     ratings_hidden: bool = False
 ) -> None:
-    """Update game ratings and mark as scraped.
+    """Update game ratings, comment count, and mark as scraped.
 
     Args:
         game_id: ID of the game to update
         rating: The game's rating (None if not available)
         rating_count: Number of ratings
+        comment_count: Number of comments on the game
         ratings_hidden: If True, ratings were hidden and should be retried later
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         if ratings_hidden:
             # Set retry cooldown (7 days) without marking as fully scraped
+            # Still update comment_count as it's always available
             cursor.execute(
                 """
                 UPDATE games
-                SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days'
+                SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days',
+                    comment_count = %s
                 WHERE id = %s
                 """,
-                (game_id,)
+                (comment_count, game_id)
             )
         else:
             cursor.execute(
                 """
                 UPDATE games
-                SET rating = %s, rating_count = %s, scraped_at = %s,
+                SET rating = %s, rating_count = %s, comment_count = %s, scraped_at = %s,
                     ratings_hidden = FALSE, ratings_hidden_until = NULL
                 WHERE id = %s
                 """,
-                (rating, rating_count, datetime.now(), game_id)
+                (rating, rating_count, comment_count, datetime.now(), game_id)
             )
         cursor.close()
 

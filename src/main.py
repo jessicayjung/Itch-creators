@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from urllib.parse import urlparse, urlunparse
 
-from . import backfiller, db, enricher, feed_poller, scorer
+from . import backfiller, db, enricher, feed_poller, scorer, seeder
 from .logger import setup_logger, LogContext
 from .models import Creator
 
@@ -139,6 +139,13 @@ def _extract_profile_url(game_url: str) -> str:
     return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
 
 
+def cmd_seed(args):
+    """Seed database with known prolific creators."""
+    with LogContext(logger, "Seeding known creators"):
+        stats = seeder.seed_creators()
+        logger.info(f"Results: added={stats['added']}, skipped={stats['skipped']}")
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -166,6 +173,9 @@ def main():
     # run command
     subparsers.add_parser("run", help="Run full pipeline")
 
+    # seed command
+    subparsers.add_parser("seed", help="Seed database with known prolific creators")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -180,6 +190,7 @@ def main():
         "enrich": cmd_enrich,
         "score": cmd_score,
         "run": cmd_run,
+        "seed": cmd_seed,
     }
 
     command_func = commands.get(args.command)

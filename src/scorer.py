@@ -11,6 +11,13 @@ _UNRATED_GAME_WEIGHT = 0.2
 _GAME_COUNT_BONUS_BASE = 1.02  # 2% bonus per additional game
 _GAME_COUNT_BONUS_CAP = 1.10   # Max 10% bonus
 
+# Comment engagement bonus
+# Comments are treated as a popularity signal (1 comment ≈ 0.5 ratings for engagement weight)
+_COMMENT_TO_RATING_RATIO = 0.5
+_COMMENT_BONUS_THRESHOLD = 10   # Minimum comments for bonus
+_COMMENT_BONUS_BASE = 1.01      # 1% bonus per 10 comments
+_COMMENT_BONUS_CAP = 1.05       # Max 5% bonus
+
 
 def calculate_bayesian_score(
     avg_rating: float,
@@ -60,7 +67,8 @@ def score_creator(creator_id: int) -> CreatorScore:
                 COUNT(*) as total_games,
                 SUM(CASE WHEN rating IS NOT NULL THEN 1 ELSE 0 END) as rated_games,
                 SUM(CASE WHEN rating IS NOT NULL THEN rating_count ELSE 0 END) as total_ratings,
-                SUM(CASE WHEN rating IS NOT NULL THEN rating * rating_count ELSE 0 END) as weighted_rating_sum
+                SUM(CASE WHEN rating IS NOT NULL THEN rating * rating_count ELSE 0 END) as weighted_rating_sum,
+                COALESCE(SUM(comment_count), 0) as total_comments
             FROM games
             WHERE creator_id = %s
         """, (creator_id,))
@@ -82,6 +90,7 @@ def score_creator(creator_id: int) -> CreatorScore:
         rated_games = row[1] or 0
         total_ratings = row[2] or 0
         weighted_rating_sum = float(row[3]) if row[3] else 0.0
+        total_comments = row[4] or 0
         unrated_games = max(total_games - rated_games, 0)
 
         # Compute weighted average: sum of (rating * count) / total count
@@ -109,6 +118,14 @@ def score_creator(creator_id: int) -> CreatorScore:
                 _GAME_COUNT_BONUS_CAP
             )
             bayesian_score = round(bayesian_score * bonus, 4)
+
+        # Apply comment engagement bonus
+        if total_comments >= _COMMENT_BONUS_THRESHOLD:
+            comment_bonus = min(
+                _COMMENT_BONUS_BASE ** (total_comments // _COMMENT_BONUS_THRESHOLD),
+                _COMMENT_BONUS_CAP
+            )
+            bayesian_score = round(bayesian_score * comment_bonus, 4)
 
         return CreatorScore(
             creator_id=creator_id,
