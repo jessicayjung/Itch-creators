@@ -20,9 +20,9 @@ RSS Feeds → New Games → Creator Discovery → Profile Backfill → Game Deta
 
 | Component | Language | Hosting | Purpose |
 |-----------|----------|---------|---------|
-| Scraper | Python | Railway/Render | Data ingestion, runs on schedule |
+| Scraper | Python | GitHub Actions | Data ingestion, runs on schedule |
 | Frontend | Next.js | Vercel | Display ranked creators |
-| Database | Postgres | Vercel Postgres | Shared data store |
+| Database | Postgres | Neon | Shared data store |
 
 ---
 
@@ -281,14 +281,15 @@ Display single creator with:
 9. `src/main.py`
 
 ### Phase 4: Deployment
-10. Deploy scraper to Railway/Render
-11. Set up cron schedule (hourly or daily)
+10. Set up GitHub Actions workflow for scraper (`.github/workflows/scraper.yml`)
+11. Configure daily cron schedule in workflow
+12. Add `POSTGRES_URL` secret to GitHub repository
 
 ### Phase 5: Frontend
-12. Next.js project setup with Vercel Postgres
-13. Home page with ranked list
-14. Creator detail page
-15. Deploy to Vercel
+13. Next.js project setup with Neon Postgres
+14. Home page with ranked list
+15. Creator detail page
+16. Deploy to Vercel
 
 ---
 

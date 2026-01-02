@@ -12,22 +12,22 @@ Two separate codebases sharing a database:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Vercel Postgres                          │
+│                       Neon Postgres                         │
 └─────────────────────────────────────────────────────────────┘
         ▲                                       ▲
         │ writes                                │ reads
         │                                       │
 ┌───────┴───────────┐                 ┌─────────┴─────────┐
 │  Python Scraper   │                 │  Next.js Frontend │
-│  (Railway/Render) │                 │     (Vercel)      │
+│ (GitHub Actions)  │                 │     (Vercel)      │
 └───────────────────┘                 └───────────────────┘
 ```
 
-**Python Scraper** — Runs on a schedule, polls RSS feeds, scrapes creator profiles and game pages, writes to Postgres. Lives in `/scraper` repo (or directory).
+**Python Scraper** — Runs on a schedule via GitHub Actions, polls RSS feeds, scrapes creator profiles and game pages, writes to Postgres. Lives in root directory with `.github/workflows/scraper.yml`.
 
-**Next.js Frontend** — Reads from Postgres, displays ranked creators. Deployed on Vercel. Lives in `/web` repo (or directory).
+**Next.js Frontend** — Reads from Postgres, displays ranked creators. Deployed on Vercel. Lives in `/web` directory.
 
-**Vercel Postgres** — Shared database. Both services connect via connection string in environment variables.
+**Neon Postgres** — Shared database. Both services connect via `POSTGRES_URL` environment variable.
 
 ## Tech Stack
 
@@ -96,31 +96,48 @@ Be respectful to itch.io:
 
 ## Environment Variables
 
-Both services need database credentials:
+Both services need the database connection string:
 
 ```
-# Vercel Postgres connection
-POSTGRES_URL=
-POSTGRES_URL_NON_POOLING=
-POSTGRES_USER=
-POSTGRES_HOST=
-POSTGRES_PASSWORD=
-POSTGRES_DATABASE=
+# Neon Postgres connection (required)
+POSTGRES_URL=postgresql://user:password@host/database?sslmode=require
 ```
+
+### Setting up secrets
+
+**GitHub Actions (Scraper):**
+1. Go to repository Settings → Secrets and variables → Actions
+2. Add `POSTGRES_URL` as a repository secret
+
+**Vercel (Frontend):**
+1. Go to project Settings → Environment Variables
+2. Add `POSTGRES_URL` for Production environment
 
 ## Useful Commands
 
-### Scraper
+### Scraper (Local)
 ```bash
 pytest                      # run tests
 python -m src.main poll     # fetch RSS feeds
 python -m src.main backfill # scrape new creator histories
 python -m src.main enrich   # scrape game ratings
 python -m src.main score    # recalculate rankings
+python -m src.main run      # run full pipeline
+```
+
+### Scraper (GitHub Actions)
+```bash
+# Trigger manually from GitHub UI:
+# Actions → Scraper Pipeline → Run workflow
+
+# Or use GitHub CLI:
+gh workflow run scraper.yml
+gh workflow run scraper.yml -f command=poll  # run specific command
 ```
 
 ### Frontend
 ```bash
+cd web
 npm run dev                 # local development
 npm run build               # production build
 vercel                      # deploy

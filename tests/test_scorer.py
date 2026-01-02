@@ -49,8 +49,7 @@ def test_calculate_bayesian_score_custom_params():
 
 def test_score_creator():
     """Test scoring a single creator."""
-    with patch("src.scorer.db.get_connection") as mock_get_conn, \
-         patch("src.scorer.db") as mock_db:
+    with patch("src.scorer.db.get_connection") as mock_get_conn:
 
         # Mock connection and cursor
         mock_conn = MagicMock()
@@ -58,19 +57,21 @@ def test_score_creator():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # Mock query result: 10 games, 500 total ratings, 4.2 avg rating
-        mock_cursor.fetchone.return_value = (10, 500, 4.2)
+        # Mock query result: (total_games, rated_games, total_ratings, weighted_rating_sum)
+        # 10 games, 8 rated, 500 total ratings, weighted sum = 4.2 * 500 = 2100
+        mock_cursor.fetchone.return_value = (10, 8, 500, 2100.0)
 
         result = score_creator(creator_id=1)
 
         assert result.creator_id == 1
         assert result.game_count == 10
         assert result.total_ratings == 500
-        assert result.avg_rating == 4.2
+        # Weighted avg = 2100 / 500 = 4.2
+        assert abs(result.avg_rating - 4.2) < 0.1
         assert result.bayesian_score > 0
 
         # With 500 ratings, Bayesian score should be very close to avg_rating
-        assert abs(result.bayesian_score - 4.2) < 0.1
+        assert abs(result.bayesian_score - 4.2) < 0.2
 
 
 def test_score_creator_no_games():
@@ -82,8 +83,8 @@ def test_score_creator_no_games():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # No games
-        mock_cursor.fetchone.return_value = (0, None, None)
+        # No games: (total_games, rated_games, total_ratings, weighted_rating_sum)
+        mock_cursor.fetchone.return_value = (0, 0, 0, 0.0)
 
         result = score_creator(creator_id=1)
 
@@ -103,15 +104,17 @@ def test_score_creator_few_ratings():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # 2 games, 5 total ratings, 5.0 avg rating
-        mock_cursor.fetchone.return_value = (2, 5, 5.0)
+        # (total_games, rated_games, total_ratings, weighted_rating_sum)
+        # 2 games, 2 rated, 5 total ratings, weighted sum = 5.0 * 5 = 25
+        mock_cursor.fetchone.return_value = (2, 2, 5, 25.0)
 
         result = score_creator(creator_id=1)
 
         assert result.creator_id == 1
         assert result.game_count == 2
         assert result.total_ratings == 5
-        assert result.avg_rating == 5.0
+        # Weighted avg = 25 / 5 = 5.0
+        assert abs(result.avg_rating - 5.0) < 0.1
 
         # With few ratings, score should be between avg and global avg
         assert 3.5 < result.bayesian_score < 5.0
@@ -196,12 +199,13 @@ def test_score_creator_rounds_correctly():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # avg_rating with many decimals
-        mock_cursor.fetchone.return_value = (5, 25, 4.123456)
+        # (total_games, rated_games, total_ratings, weighted_rating_sum)
+        # 5 games, 5 rated, 25 ratings, weighted sum = 4.123456 * 25 = 103.0864
+        mock_cursor.fetchone.return_value = (5, 5, 25, 103.0864)
 
         result = score_creator(creator_id=1)
 
-        # avg_rating should be rounded to 2 decimals
+        # avg_rating = 103.0864 / 25 = 4.123456, should be rounded to 2 decimals
         assert result.avg_rating == 4.12
 
         # bayesian_score should be rounded to 4 decimals

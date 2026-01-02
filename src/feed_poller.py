@@ -4,6 +4,9 @@ from typing import TypedDict
 import feedparser
 
 from .http_client import fetch
+from .logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class FeedEntry(TypedDict):
@@ -38,7 +41,7 @@ def poll_feed(feed_url: str) -> list[FeedEntry]:
     for entry in feed.entries:
         # Defensive: check if required fields exist
         if not hasattr(entry, "link") or not hasattr(entry, "title"):
-            print(f"Warning: Skipping malformed feed entry (missing link or title)")
+            logger.warning("Skipping malformed feed entry (missing link or title)")
             continue
 
         # Extract creator from the link

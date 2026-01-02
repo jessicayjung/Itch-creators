@@ -15,36 +15,37 @@ def sample_profile_html():
 
 def test_parse_profile(sample_profile_html):
     """Test parsing a creator profile page."""
-    result = parse_profile(sample_profile_html)
+    games, next_url = parse_profile(sample_profile_html)
 
-    assert len(result) == 4
+    assert len(games) == 4
 
     # Check first game
-    assert result[0]["title"] == "Cool Adventure Game"
-    assert result[0]["url"] == "https://testdev.itch.io/cool-adventure"
-    assert result[0]["publish_date"] == datetime(2024, 1, 15)
+    assert games[0]["title"] == "Cool Adventure Game"
+    assert games[0]["url"] == "https://testdev.itch.io/cool-adventure"
+    assert games[0]["publish_date"] == datetime(2024, 1, 15)
 
     # Check second game
-    assert result[1]["title"] == "Puzzle Master"
-    assert result[1]["url"] == "https://testdev.itch.io/puzzle-master"
-    assert result[1]["publish_date"] == datetime(2024, 2, 20)
+    assert games[1]["title"] == "Puzzle Master"
+    assert games[1]["url"] == "https://testdev.itch.io/puzzle-master"
+    assert games[1]["publish_date"] == datetime(2024, 2, 20)
 
     # Check third game
-    assert result[2]["title"] == "Space Game"
-    assert result[2]["url"] == "https://testdev.itch.io/space-game"
-    assert result[2]["publish_date"] == datetime(2024, 3, 10)
+    assert games[2]["title"] == "Space Game"
+    assert games[2]["url"] == "https://testdev.itch.io/space-game"
+    assert games[2]["publish_date"] == datetime(2024, 3, 10)
 
     # Check game without date
-    assert result[3]["title"] == "Old Game"
-    assert result[3]["url"] == "https://testdev.itch.io/old-game"
-    assert result[3]["publish_date"] is None
+    assert games[3]["title"] == "Old Game"
+    assert games[3]["url"] == "https://testdev.itch.io/old-game"
+    assert games[3]["publish_date"] is None
 
 
 def test_parse_profile_empty():
     """Test parsing an empty profile."""
     html = "<html><body></body></html>"
-    result = parse_profile(html)
-    assert len(result) == 0
+    games, next_url = parse_profile(html)
+    assert len(games) == 0
+    assert next_url is None
 
 
 def test_parse_profile_no_dates():
@@ -61,13 +62,14 @@ def test_parse_profile_no_dates():
     </body>
     </html>
     """
-    result = parse_profile(html)
+    games, next_url = parse_profile(html)
 
-    assert len(result) == 2
-    assert result[0]["title"] == "Game 1"
-    assert result[0]["publish_date"] is None
-    assert result[1]["title"] == "Game 2"
-    assert result[1]["publish_date"] is None
+    assert len(games) == 2
+    assert games[0]["title"] == "Game 1"
+    assert games[0]["publish_date"] is None
+    assert games[1]["title"] == "Game 2"
+    assert games[1]["publish_date"] is None
+    assert next_url is None
 
 
 def test_parse_profile_malformed():
@@ -85,11 +87,12 @@ def test_parse_profile_malformed():
     </body>
     </html>
     """
-    result = parse_profile(html)
+    games, next_url = parse_profile(html)
 
     # Should only find the one with correct class
-    assert len(result) == 1
-    assert result[0]["title"] == "Game 2"
+    assert len(games) == 1
+    assert games[0]["title"] == "Game 2"
+    assert next_url is None
 
 
 def test_parse_date_text():
@@ -118,10 +121,10 @@ def test_parse_date_text_invalid():
 
 def test_parse_profile_extracts_all_grids(sample_profile_html):
     """Test that games from multiple game grids are extracted."""
-    result = parse_profile(sample_profile_html)
+    games, next_url = parse_profile(sample_profile_html)
 
     # Should find games from both game_grid_widget divs
-    assert len(result) == 4
-    titles = [game["title"] for game in result]
+    assert len(games) == 4
+    titles = [game["title"] for game in games]
     assert "Cool Adventure Game" in titles
     assert "Old Game" in titles

@@ -5,17 +5,21 @@ CLI entry point for itch-creators scraper.
 import argparse
 import sys
 from datetime import datetime
+from urllib.parse import urlparse, urlunparse
 
 from . import backfiller, db, enricher, feed_poller, scorer
+from .logger import setup_logger, LogContext
 from .models import Creator
+
+logger = setup_logger(__name__)
 
 
 def cmd_poll(args):
     """Poll RSS feeds for new games and creators."""
-    print("Polling RSS feeds...")
+    logger.info("Polling RSS feeds...")
 
     entries = feed_poller.get_new_releases()
-    print(f"Found {len(entries)} new releases")
+    logger.info(f"Found {len(entries)} new releases")
 
     new_creators = 0
     new_games = 0
@@ -23,7 +27,7 @@ def cmd_poll(args):
     for entry in entries:
         # Skip entries where creator could not be extracted
         if not entry["creator"]:
-            print(f"  Warning: Could not extract creator from URL: {entry['game_url']}")
+            logger.warning(f"Could not extract creator from URL: {entry['game_url']}")
             continue
 
         # Check if creator exists, if not create them
@@ -44,7 +48,7 @@ def cmd_poll(args):
             creator_id = db.insert_creator(creator)
             if creator_id:
                 new_creators += 1
-                print(f"  New creator: {entry['creator']}")
+                logger.info(f"New creator: {entry['creator']}")
 
         # Extract game ID from URL
         game_id = backfiller._extract_game_id(entry["game_url"])
@@ -67,69 +71,49 @@ def cmd_poll(args):
         if inserted_id:
             new_games += 1
 
-    print(f"\nResults:")
-    print(f"  New creators: {new_creators}")
-    print(f"  New games: {new_games}")
+    logger.info(f"Results: new_creators={new_creators}, new_games={new_games}")
 
 
 def cmd_backfill(args):
     """Backfill creator game histories."""
-    print("Backfilling creators...")
+    with LogContext(logger, "Backfilling creators"):
+        stats = backfiller.backfill_all()
 
-    stats = backfiller.backfill_all()
-
-    print(f"\nResults:")
-    print(f"  Creators processed: {stats['creators_processed']}")
-    print(f"  Games inserted: {stats['games_inserted']}")
-    print(f"  Errors: {stats['errors']}")
+    logger.info(f"Results: creators_processed={stats['creators_processed']}, games_inserted={stats['games_inserted']}, errors={stats['errors']}")
 
 
 def cmd_enrich(args):
     """Enrich games with ratings."""
-    print("Enriching game ratings...")
+    with LogContext(logger, "Enriching game ratings"):
+        stats = enricher.enrich_all()
 
-    stats = enricher.enrich_all()
-
-    print(f"\nResults:")
-    print(f"  Games processed: {stats['games_processed']}")
-    print(f"  Errors: {stats['errors']}")
+    logger.info(f"Results: games_processed={stats['games_processed']}, errors={stats['errors']}")
 
 
 def cmd_score(args):
     """Recalculate creator scores."""
-    print("Calculating creator scores...")
+    with LogContext(logger, "Calculating creator scores"):
+        stats = scorer.score_all()
 
-    stats = scorer.score_all()
-
-    print(f"\nResults:")
-    print(f"  Creators scored: {stats['creators_scored']}")
+    logger.info(f"Results: creators_scored={stats['creators_scored']}")
 
 
 def cmd_run(args):
     """Run full pipeline: poll → backfill → enrich → score."""
-    print("Running full pipeline...\n")
+    with LogContext(logger, "Running full pipeline"):
+        cmd_poll(args)
+        cmd_backfill(args)
+        cmd_enrich(args)
+        cmd_score(args)
 
-    print("=" * 50)
-    cmd_poll(args)
-
-    print("\n" + "=" * 50)
-    cmd_backfill(args)
-
-    print("\n" + "=" * 50)
-    cmd_enrich(args)
-
-    print("\n" + "=" * 50)
-    cmd_score(args)
-
-    print("\n" + "=" * 50)
-    print("Pipeline complete!")
+    logger.info("Pipeline complete!")
 
 
 def cmd_init_db(args):
     """Initialize database schema."""
-    print("Initializing database...")
+    logger.info("Initializing database...")
     db.create_tables()
-    print("Database initialized successfully!")
+    logger.info("Database initialized successfully!")
 
 
 def _extract_profile_url(game_url: str) -> str:
@@ -138,6 +122,7 @@ def _extract_profile_url(game_url: str) -> str:
 
     Example:
         https://testdev.itch.io/cool-game -> https://testdev.itch.io
+        testdev.itch.io/cool-game -> https://testdev.itch.io
 
     Args:
         game_url: Full game URL
@@ -145,11 +130,13 @@ def _extract_profile_url(game_url: str) -> str:
     Returns:
         Profile URL
     """
-    parts = game_url.split("/")
-    if len(parts) >= 3:
-        # Reconstruct: protocol + // + domain
-        return f"{parts[0]}//{parts[2]}"
-    return game_url
+    # Add scheme if missing
+    if not game_url.startswith(("http://", "https://")):
+        game_url = "https://" + game_url
+
+    parsed = urlparse(game_url)
+    # Reconstruct with just scheme and netloc (domain)
+    return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
 
 
 def main():
@@ -200,10 +187,10 @@ def main():
         try:
             command_func(args)
         except KeyboardInterrupt:
-            print("\n\nInterrupted by user")
+            logger.warning("Interrupted by user")
             sys.exit(1)
         except Exception as e:
-            print(f"\nError: {e}", file=sys.stderr)
+            logger.error(f"Error: {e}", exc_info=True)
             sys.exit(1)
     else:
         parser.print_help()

@@ -4,20 +4,42 @@ from datetime import datetime
 from typing import Iterator
 
 import psycopg2
+from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
 from .models import Creator, CreatorScore, Game
+
+load_dotenv()
+
+
+def get_connection_string() -> str:
+    """Get database connection string from environment.
+
+    Supports POSTGRES_URL or individual POSTGRES_* variables.
+    """
+    url = os.getenv("POSTGRES_URL")
+    if url:
+        return url
+
+    # Build from individual components
+    host = os.getenv("POSTGRES_HOST")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    database = os.getenv("POSTGRES_DATABASE")
+    port = os.getenv("POSTGRES_PORT", "5432")
+
+    if not all([host, user, password, database]):
+        raise ValueError(
+            "Missing database configuration. Set POSTGRES_URL or individual POSTGRES_* variables."
+        )
+
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 
 @contextmanager
 def get_connection() -> Iterator[psycopg2.extensions.connection]:
     """Context manager for database connections."""
-    conn = psycopg2.connect(
-        dbname=os.getenv("POSTGRES_DATABASE"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        host=os.getenv("POSTGRES_HOST"),
-    )
+    conn = psycopg2.connect(get_connection_string())
     try:
         yield conn
         conn.commit()
@@ -55,8 +77,18 @@ def create_tables() -> None:
                 rating DECIMAL(3,2),
                 rating_count INTEGER DEFAULT 0,
                 scraped_at TIMESTAMP,
+                ratings_hidden BOOLEAN DEFAULT FALSE,
+                ratings_hidden_until TIMESTAMP,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        """)
+
+        # Add columns for existing databases
+        cursor.execute("""
+            ALTER TABLE games ADD COLUMN IF NOT EXISTS ratings_hidden BOOLEAN DEFAULT FALSE
+        """)
+        cursor.execute("""
+            ALTER TABLE games ADD COLUMN IF NOT EXISTS ratings_hidden_until TIMESTAMP
         """)
 
         cursor.execute("""
@@ -190,7 +222,7 @@ def get_unbackfilled_creators() -> list[Creator]:
 
 
 def get_unenriched_games() -> list[Game]:
-    """Fetch all games that haven't been scraped for ratings."""
+    """Fetch all games that haven't been scraped for ratings or need re-enrichment."""
     with get_connection() as conn:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("""
@@ -198,6 +230,7 @@ def get_unenriched_games() -> list[Game]:
             FROM games g
             LEFT JOIN creators c ON g.creator_id = c.id
             WHERE g.scraped_at IS NULL
+               OR (g.ratings_hidden = TRUE AND g.ratings_hidden_until < NOW())
         """)
         rows = cursor.fetchall()
         cursor.close()
@@ -218,18 +251,42 @@ def get_unenriched_games() -> list[Game]:
         ]
 
 
-def update_game_ratings(game_id: int, rating: float | None, rating_count: int) -> None:
-    """Update game ratings and mark as scraped."""
+def update_game_ratings(
+    game_id: int,
+    rating: float | None,
+    rating_count: int,
+    ratings_hidden: bool = False
+) -> None:
+    """Update game ratings and mark as scraped.
+
+    Args:
+        game_id: ID of the game to update
+        rating: The game's rating (None if not available)
+        rating_count: Number of ratings
+        ratings_hidden: If True, ratings were hidden and should be retried later
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE games
-            SET rating = %s, rating_count = %s, scraped_at = %s
-            WHERE id = %s
-            """,
-            (rating, rating_count, datetime.now(), game_id)
-        )
+        if ratings_hidden:
+            # Set retry cooldown (7 days) without marking as fully scraped
+            cursor.execute(
+                """
+                UPDATE games
+                SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days'
+                WHERE id = %s
+                """,
+                (game_id,)
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE games
+                SET rating = %s, rating_count = %s, scraped_at = %s,
+                    ratings_hidden = FALSE, ratings_hidden_until = NULL
+                WHERE id = %s
+                """,
+                (rating, rating_count, datetime.now(), game_id)
+            )
         cursor.close()
 
 

@@ -50,12 +50,13 @@ def score_creator(creator_id: int) -> CreatorScore:
         cursor = conn.cursor()
 
         # Get aggregate stats for this creator's games
+        # Use weighted sum to properly account for rating_count per game
         cursor.execute("""
             SELECT
                 COUNT(*) as total_games,
                 SUM(CASE WHEN rating IS NOT NULL THEN 1 ELSE 0 END) as rated_games,
                 SUM(CASE WHEN rating IS NOT NULL THEN rating_count ELSE 0 END) as total_ratings,
-                AVG(CASE WHEN rating IS NOT NULL THEN rating END) as avg_rating
+                SUM(CASE WHEN rating IS NOT NULL THEN rating * rating_count ELSE 0 END) as weighted_rating_sum
             FROM games
             WHERE creator_id = %s
         """, (creator_id,))
@@ -76,12 +77,19 @@ def score_creator(creator_id: int) -> CreatorScore:
         total_games = row[0] or 0
         rated_games = row[1] or 0
         total_ratings = row[2] or 0
-        avg_rating = float(row[3]) if row[3] else 0.0
+        weighted_rating_sum = float(row[3]) if row[3] else 0.0
         unrated_games = max(total_games - rated_games, 0)
+
+        # Compute weighted average: sum of (rating * count) / total count
+        if total_ratings > 0:
+            avg_rating = weighted_rating_sum / total_ratings
+        else:
+            avg_rating = 0.0
 
         if rated_games == 0:
             adjusted_avg = _DEFAULT_GLOBAL_AVG
         else:
+            # Penalize creators with many unrated games
             weighted_unrated = unrated_games * _UNRATED_GAME_WEIGHT
             adjusted_avg = (
                 (avg_rating * rated_games) + (_DEFAULT_GLOBAL_AVG * weighted_unrated)

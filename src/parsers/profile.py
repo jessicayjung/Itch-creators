@@ -11,7 +11,7 @@ class ProfileGame(TypedDict):
     publish_date: datetime | None
 
 
-def parse_profile(html: str) -> list[ProfileGame]:
+def parse_profile(html: str) -> tuple[list[ProfileGame], str | None]:
     """
     Extract list of games from a creator's profile page.
 
@@ -19,7 +19,7 @@ def parse_profile(html: str) -> list[ProfileGame]:
         html: Raw HTML of the profile page
 
     Returns:
-        List of dictionaries containing game information
+        Tuple of (games list, next page URL or None)
     """
     soup = BeautifulSoup(html, "lxml")
     games: list[ProfileGame] = []
@@ -49,7 +49,13 @@ def parse_profile(html: str) -> list[ProfileGame]:
             "publish_date": publish_date,
         })
 
-    return games
+    # Check for pagination - look for "next" link
+    next_url = None
+    next_link = soup.find("a", class_="next_page")
+    if next_link:
+        next_url = next_link.get("href")
+
+    return games, next_url
 
 
 def _parse_date_text(text: str) -> datetime | None:

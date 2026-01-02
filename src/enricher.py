@@ -1,7 +1,10 @@
 from . import db
 from .http_client import fetch
+from .logger import setup_logger, log_error_with_context
 from .models import Game
 from .parsers import game as game_parser
+
+logger = setup_logger(__name__)
 
 
 def enrich_game(game: Game) -> bool:
@@ -23,11 +26,15 @@ def enrich_game(game: Game) -> bool:
     # Parse ratings from page
     rating_data = game_parser.parse_game(html)
 
+    # Detect if ratings are hidden (no rating and no rating count)
+    ratings_hidden = rating_data["rating"] is None and rating_data["rating_count"] == 0
+
     # Update in database
     db.update_game_ratings(
         game_id=game.id,
         rating=rating_data["rating"],
-        rating_count=rating_data["rating_count"]
+        rating_count=rating_data["rating_count"],
+        ratings_hidden=ratings_hidden
     )
 
     return True
@@ -53,7 +60,6 @@ def enrich_all() -> dict[str, int]:
             stats["games_processed"] += 1
         except Exception as e:
             stats["errors"] += 1
-            # Log error but continue processing other games
-            print(f"Error enriching {game.title} ({game.url}): {e}")
+            log_error_with_context(logger, "Enrich", f"{game.title} ({game.url})", e)
 
     return stats

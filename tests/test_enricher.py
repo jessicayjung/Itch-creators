@@ -52,11 +52,12 @@ def test_enrich_game(sample_game, sample_game_html):
         # Should have fetched the game page
         mock_fetch.assert_called_once_with("https://testdev.itch.io/cool-adventure")
 
-        # Should have updated ratings
+        # Should have updated ratings (not hidden since we have a rating)
         mock_update.assert_called_once_with(
             game_id=1,
             rating=4.5,
-            rating_count=150
+            rating_count=150,
+            ratings_hidden=False
         )
 
 
@@ -71,11 +72,12 @@ def test_enrich_game_no_ratings(sample_game, sample_game_no_ratings_html):
 
         assert result is True
 
-        # Should have updated with None rating
+        # Should have updated with None rating and marked as hidden
         mock_update.assert_called_once_with(
             game_id=1,
             rating=None,
-            rating_count=0
+            rating_count=0,
+            ratings_hidden=True
         )
 
 

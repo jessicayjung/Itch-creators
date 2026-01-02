@@ -39,8 +39,8 @@ def test_create_tables(mock_env):
 
         # Verify connection was established
         mock_connect.assert_called_once()
-        # Verify SQL was executed
-        assert mock_cursor.execute.call_count == 5  # 3 tables + 2 indexes
+        # Verify SQL was executed: 3 tables + 2 ALTER TABLEs (ratings_hidden columns) + 2 indexes
+        assert mock_cursor.execute.call_count == 7
         mock_conn.commit.assert_called_once()
         mock_conn.close.assert_called_once()
 
