@@ -71,6 +71,7 @@ def backfill_creator(creator: Creator) -> int:
                 rating_count=0,
                 comment_count=0,
                 description=None,
+                tags=None,
                 scraped_at=None
             )
 

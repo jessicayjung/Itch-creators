@@ -99,6 +99,9 @@ def create_tables() -> None:
         cursor.execute("""
             ALTER TABLE games ADD COLUMN IF NOT EXISTS description TEXT
         """)
+        cursor.execute("""
+            ALTER TABLE games ADD COLUMN IF NOT EXISTS tags TEXT[]
+        """)
 
         # Migrate from old UNIQUE constraint to composite constraint
         # Check if old constraint exists and drop it
@@ -291,6 +294,7 @@ def get_unenriched_games() -> list[Game]:
                 rating_count=row["rating_count"],
                 comment_count=row["comment_count"] if row["comment_count"] is not None else 0,
                 description=row["description"],
+                tags=list(row["tags"]) if row["tags"] else None,
                 scraped_at=row["scraped_at"]
             )
             for row in rows
@@ -305,9 +309,10 @@ def update_game_ratings(
     description: str | None = None,
     publish_date: datetime | None = None,
     title: str | None = None,
+    tags: list[str] | None = None,
     ratings_hidden: bool = False
 ) -> None:
-    """Update game ratings, comment count, description, publish_date, title, and mark as scraped.
+    """Update game ratings, comment count, description, publish_date, title, tags, and mark as scraped.
 
     Args:
         game_id: ID of the game to update
@@ -317,35 +322,36 @@ def update_game_ratings(
         description: Short description/summary of the game
         publish_date: When the game was published (only updates if currently NULL)
         title: Game title (only updates if currently empty)
+        tags: List of tags/genres for the game
         ratings_hidden: If True, ratings were hidden and should be retried later
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         if ratings_hidden:
             # Set retry cooldown (7 days) without marking as fully scraped
-            # Still update comment_count, description, and title as they're always available
+            # Still update comment_count, description, title, and tags as they're always available
             cursor.execute(
                 """
                 UPDATE games
                 SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days',
-                    comment_count = %s, description = %s,
+                    comment_count = %s, description = %s, tags = %s,
                     publish_date = COALESCE(publish_date, %s),
                     title = CASE WHEN title = '' OR title IS NULL THEN %s ELSE title END
                 WHERE id = %s
                 """,
-                (comment_count, description, publish_date.date() if publish_date else None, title, game_id)
+                (comment_count, description, tags, publish_date.date() if publish_date else None, title, game_id)
             )
         else:
             cursor.execute(
                 """
                 UPDATE games
-                SET rating = %s, rating_count = %s, comment_count = %s, description = %s,
+                SET rating = %s, rating_count = %s, comment_count = %s, description = %s, tags = %s,
                     publish_date = COALESCE(publish_date, %s),
                     title = CASE WHEN title = '' OR title IS NULL THEN %s ELSE title END,
                     scraped_at = %s, ratings_hidden = FALSE, ratings_hidden_until = NULL
                 WHERE id = %s
                 """,
-                (rating, rating_count, comment_count, description,
+                (rating, rating_count, comment_count, description, tags,
                  publish_date.date() if publish_date else None, title, datetime.now(), game_id)
             )
         cursor.close()

@@ -13,6 +13,7 @@ class GameRating(TypedDict):
     comment_count: int
     description: str | None
     publish_date: datetime | None
+    tags: list[str]
 
 
 def parse_game(html: str) -> GameRating:
@@ -173,6 +174,33 @@ def parse_game(html: str) -> GameRating:
             except (ValueError, TypeError):
                 pass
 
+    # Extract tags/genres
+    # Tags are links to /games/tag-* or /games/genre-*
+    tags: list[str] = []
+    seen_tags: set[str] = set()
+
+    # Find all tag/genre links
+    for link in soup.find_all("a", href=True):
+        href = link.get("href", "")
+        # Match genre-* or tag-* patterns
+        if "/games/genre-" in href or "/games/tag-" in href:
+            # Extract the tag name from URL
+            # e.g., https://itch.io/games/genre-action -> action
+            # e.g., https://itch.io/games/tag-pixel-art -> pixel-art
+            parts = href.split("/")
+            if parts:
+                last_part = parts[-1]
+                if last_part.startswith("genre-"):
+                    tag = last_part[6:]  # Remove "genre-" prefix
+                elif last_part.startswith("tag-"):
+                    tag = last_part[4:]  # Remove "tag-" prefix
+                else:
+                    continue
+
+                if tag and tag not in seen_tags:
+                    seen_tags.add(tag)
+                    tags.append(tag)
+
     return {
         "title": title,
         "rating": rating,
@@ -180,4 +208,5 @@ def parse_game(html: str) -> GameRating:
         "comment_count": comment_count,
         "description": description,
         "publish_date": publish_date,
+        "tags": tags,
     }

@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from urllib.parse import urlparse, urlunparse
 
-from . import backfiller, db, enricher, feed_poller, scorer, seeder
+from . import backfiller, browse_scraper, db, enricher, feed_poller, scorer, seeder
 from .logger import setup_logger, LogContext
 from .models import Creator
 
@@ -66,6 +66,7 @@ def cmd_poll(args):
             rating_count=0,
             comment_count=0,
             description=None,
+            tags=None,
             scraped_at=None
         )
 
@@ -148,6 +149,64 @@ def cmd_seed(args):
         logger.info(f"Results: added={stats['added']}, skipped={stats['skipped']}")
 
 
+def cmd_discover(args):
+    """Discover creators from itch.io browse pages."""
+    max_pages = getattr(args, 'pages', 2)
+
+    with LogContext(logger, "Discovering creators from browse pages"):
+        games = browse_scraper.scrape_all_browse_pages(max_pages_per_source=max_pages)
+
+    new_creators = 0
+    new_games = 0
+
+    for game in games:
+        if not game["creator"]:
+            continue
+
+        # Check if creator exists, if not create them
+        creator = db.get_creator_by_name(game["creator"])
+
+        if not creator:
+            profile_url = _extract_profile_url(game["url"])
+
+            creator = Creator(
+                id=None,
+                name=game["creator"],
+                profile_url=profile_url,
+                backfilled=False,
+                first_seen=datetime.now()
+            )
+
+            creator_id = db.insert_creator(creator)
+            if creator_id:
+                new_creators += 1
+
+        # Extract game ID and insert
+        game_id = backfiller._extract_game_id(game["url"])
+
+        from .models import Game
+        game_obj = Game(
+            id=None,
+            itch_id=game_id,
+            title=game["title"],
+            creator_name=game["creator"],
+            url=game["url"],
+            publish_date=None,
+            rating=None,
+            rating_count=0,
+            comment_count=0,
+            description=None,
+            tags=None,
+            scraped_at=None
+        )
+
+        inserted_id = db.insert_game(game_obj)
+        if inserted_id:
+            new_games += 1
+
+    logger.info(f"Results: games_found={len(games)}, new_creators={new_creators}, new_games={new_games}")
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -178,6 +237,10 @@ def main():
     # seed command
     subparsers.add_parser("seed", help="Seed database with known prolific creators")
 
+    # discover command
+    discover_parser = subparsers.add_parser("discover", help="Discover creators from browse pages")
+    discover_parser.add_argument("--pages", type=int, default=2, help="Pages to scrape per source (default: 2)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -193,6 +256,7 @@ def main():
         "score": cmd_score,
         "run": cmd_run,
         "seed": cmd_seed,
+        "discover": cmd_discover,
     }
 
     command_func = commands.get(args.command)

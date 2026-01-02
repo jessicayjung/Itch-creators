@@ -14,6 +14,7 @@ class Game:
     rating_count: int
     comment_count: int
     description: str | None
+    tags: list[str] | None
     scraped_at: datetime | None
 
 

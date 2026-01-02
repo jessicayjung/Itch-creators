@@ -30,14 +30,20 @@ jobs:
       - name: Initialize database (if needed)
         run: python -m src.main init-db
 
-      - name: Poll for new games
+      - name: Seed known creators
+        run: python -m src.main seed
+
+      - name: Poll RSS feeds for new games
         run: python -m src.main poll
 
-      - name: Backfill creator games
+      - name: Discover creators from browse pages
+        run: python -m src.main discover --pages 3
+
+      - name: Backfill creator game histories
         run: python -m src.main backfill
 
-      - name: Enrich game data
+      - name: Enrich game data (ratings, descriptions)
         run: python -m src.main enrich
 
-      - name: Calculate scores
+      - name: Calculate creator scores
         run: python -m src.main score
