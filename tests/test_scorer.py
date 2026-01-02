@@ -70,8 +70,9 @@ def test_score_creator():
         assert abs(result.avg_rating - 4.2) < 0.1
         assert result.bayesian_score > 0
 
-        # With 500 ratings, Bayesian score should be very close to avg_rating
-        assert abs(result.bayesian_score - 4.2) < 0.2
+        # With 500 ratings and 10 games (capped 1.10x bonus), score is boosted
+        # Base score ~ 4.17, with 10% bonus = ~4.59
+        assert result.bayesian_score > 4.5  # Has game count bonus
 
 
 def test_score_creator_no_games():
@@ -210,3 +211,75 @@ def test_score_creator_rounds_correctly():
 
         # bayesian_score should be rounded to 4 decimals
         assert len(str(result.bayesian_score).split('.')[-1]) <= 4
+
+
+def test_game_count_bonus_applied():
+    """Test that multi-game creators get a score bonus."""
+    with patch("src.scorer.db.get_connection") as mock_get_conn:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_get_conn.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        # Creator with 3 games: should get 1.02^2 = 1.0404 bonus
+        # (total_games, rated_games, total_ratings, weighted_rating_sum)
+        mock_cursor.fetchone.return_value = (3, 3, 100, 400.0)  # avg = 4.0
+
+        result = score_creator(creator_id=1)
+
+        # Base bayesian score with avg=4.0, 100 ratings, min_votes=5
+        # = (100/(100+5)) * 4.0 + (5/(100+5)) * 3.5
+        # = 0.9524 * 4.0 + 0.0476 * 3.5 = 3.8095 + 0.1667 = 3.9762
+        base_score = 3.9762
+        expected_with_bonus = base_score * (1.02 ** 2)  # 1.0404 multiplier
+
+        assert result.game_count == 3
+        assert result.bayesian_score > base_score
+        assert abs(result.bayesian_score - expected_with_bonus) < 0.05
+
+
+def test_game_count_bonus_capped():
+    """Test that game count bonus doesn't exceed 10%."""
+    with patch("src.scorer.db.get_connection") as mock_get_conn:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_get_conn.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        # Creator with 20 games: 1.02^19 = 1.456, but should cap at 1.10
+        mock_cursor.fetchone.return_value = (20, 20, 200, 800.0)  # avg = 4.0
+
+        result = score_creator(creator_id=1)
+
+        # Base bayesian score with avg=4.0, 200 ratings, min_votes=5
+        # = (200/(200+5)) * 4.0 + (5/(200+5)) * 3.5 = 3.9878
+        base_score = 3.9878
+        max_with_cap = base_score * 1.10  # Max 10% bonus
+
+        assert result.game_count == 20
+        # Score should be capped, not exceed max
+        assert result.bayesian_score <= max_with_cap + 0.01
+        # Score should be at the cap (1.10x)
+        assert abs(result.bayesian_score - max_with_cap) < 0.01
+
+
+def test_single_game_no_bonus():
+    """Test that single game creators get no bonus."""
+    with patch("src.scorer.db.get_connection") as mock_get_conn:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_get_conn.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        # Creator with 1 game: no bonus applied
+        mock_cursor.fetchone.return_value = (1, 1, 50, 200.0)  # avg = 4.0
+
+        result = score_creator(creator_id=1)
+
+        # Base bayesian score with avg=4.0, 50 ratings, min_votes=5
+        # = (50/(50+5)) * 4.0 + (5/(50+5)) * 3.5
+        # = 0.909 * 4.0 + 0.091 * 3.5 = 3.636 + 0.318 = 3.954
+        expected_no_bonus = 3.9545
+
+        assert result.game_count == 1
+        assert abs(result.bayesian_score - expected_no_bonus) < 0.01

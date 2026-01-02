@@ -3,9 +3,13 @@ from .models import CreatorScore
 
 
 # Default values for Bayesian averaging
-_DEFAULT_MIN_VOTES = 10
+_DEFAULT_MIN_VOTES = 5
 _DEFAULT_GLOBAL_AVG = 3.5
 _UNRATED_GAME_WEIGHT = 0.2
+
+# Game count bonus for multi-game creators
+_GAME_COUNT_BONUS_BASE = 1.02  # 2% bonus per additional game
+_GAME_COUNT_BONUS_CAP = 1.10   # Max 10% bonus
 
 
 def calculate_bayesian_score(
@@ -24,7 +28,7 @@ def calculate_bayesian_score(
         avg_rating: Creator's average rating
         rating_count: Total number of ratings across all games
         global_avg: Global average rating (default: 3.5)
-        min_votes: Minimum votes threshold for confidence (default: 10)
+        min_votes: Minimum votes threshold for confidence (default: 5)
 
     Returns:
         Weighted Bayesian score
@@ -97,6 +101,14 @@ def score_creator(creator_id: int) -> CreatorScore:
 
         # Calculate Bayesian score using adjusted average and real ratings volume
         bayesian_score = calculate_bayesian_score(adjusted_avg, total_ratings)
+
+        # Apply game count bonus for multi-game creators
+        if total_games > 1:
+            bonus = min(
+                _GAME_COUNT_BONUS_BASE ** (total_games - 1),
+                _GAME_COUNT_BONUS_CAP
+            )
+            bayesian_score = round(bayesian_score * bonus, 4)
 
         return CreatorScore(
             creator_id=creator_id,
