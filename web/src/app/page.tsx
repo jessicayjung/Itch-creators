@@ -43,20 +43,48 @@ export default async function Home({ searchParams }: PageProps) {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 mb-6">
-        {FILTERS.map((f) => (
-          <Link
-            key={f.value}
-            href={f.value === 'qualified' ? '/' : `/?filter=${f.value}`}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              filter === f.value
-                ? 'bg-slate-800 text-white'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-          >
-            {f.label}
-          </Link>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex gap-2">
+          {FILTERS.map((f) => (
+            <Link
+              key={f.value}
+              href={f.value === 'qualified' ? '/' : `/?filter=${f.value}`}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                filter === f.value
+                  ? 'bg-slate-800 text-white'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {f.label}
+            </Link>
+          ))}
+        </div>
+        {/* Top Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              Page {page}/{totalPages}
+            </span>
+            <div className="flex gap-1">
+              {page > 1 && (
+                <Link
+                  href={`/?filter=${filter}&page=${page - 1}`}
+                  className="px-3 py-1 text-sm font-medium rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  Prev
+                </Link>
+              )}
+              {page < totalPages && (
+                <Link
+                  href={`/?filter=${filter}&page=${page + 1}`}
+                  className="px-3 py-1 text-sm font-medium rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  Next
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">

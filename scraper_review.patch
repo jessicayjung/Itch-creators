@@ -1,0 +1,3551 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..b9e7059
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,7 @@
++# Vercel Postgres connection
++POSTGRES_URL=
++POSTGRES_URL_NON_POOLING=
++POSTGRES_USER=
++POSTGRES_HOST=
++POSTGRES_PASSWORD=
++POSTGRES_DATABASE=
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..5b642de
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,44 @@
++# Python
++__pycache__/
++*.py[cod]
++*$py.class
++*.so
++.Python
++build/
++develop-eggs/
++dist/
++downloads/
++eggs/
++.eggs/
++lib/
++lib64/
++parts/
++sdist/
++var/
++wheels/
++*.egg-info/
++.installed.cfg
++*.egg
++
++# Virtual environments
++venv/
++ENV/
++env/
++
++# Environment variables
++.env
++.env.local
++
++# IDE
++.vscode/
++.idea/
++*.swp
++*.swo
++
++# Testing
++.pytest_cache/
++.coverage
++htmlcov/
++
++# OS
++.DS_Store
+diff --git a/README_SCRAPER.md b/README_SCRAPER.md
+new file mode 100644
+index 0000000..4dd2d5a
+--- /dev/null
++++ b/README_SCRAPER.md
+@@ -0,0 +1,79 @@
++# Itch Creators - Python Scraper
++
++Data collection service for tracking itch.io game creators and their publishing history.
++
++## Setup
++
++1. **Install dependencies:**
++   ```bash
++   pip install -r requirements.txt
++   ```
++
++2. **Configure database:**
++
++   Create a `.env` file with your Vercel Postgres credentials:
++   ```bash
++   POSTGRES_URL=your_postgres_url
++   POSTGRES_USER=your_user
++   POSTGRES_PASSWORD=your_password
++   POSTGRES_HOST=your_host
++   POSTGRES_DATABASE=your_database
++   ```
++
++3. **Initialize database:**
++   ```bash
++   python -m src init-db
++   ```
++
++## Usage
++
++### Poll for new releases
++Fetch new games from RSS feeds:
++```bash
++python -m src poll
++```
++
++### Backfill creator histories
++Scrape all games from newly discovered creators:
++```bash
++python -m src backfill
++```
++
++### Enrich game ratings
++Fetch rating information for games:
++```bash
++python -m src enrich
++```
++
++### Calculate scores
++Recalculate creator rankings using Bayesian averaging:
++```bash
++python -m src score
++```
++
++### Run full pipeline
++Execute all steps in sequence:
++```bash
++python -m src run
++```
++
++## Development
++
++### Run tests
++```bash
++pytest
++```
++
++### Run tests with coverage
++```bash
++pytest --cov=src --cov-report=html
++```
++
++### Run specific test file
++```bash
++pytest tests/test_db.py
++```
++
++## Architecture
++
++See `docs/claude.md` and `docs/implementation-plan.md` for detailed architecture and implementation specifications.
+diff --git a/REVIEW.md b/REVIEW.md
+new file mode 100644
+index 0000000..8c35b4d
+--- /dev/null
++++ b/REVIEW.md
+@@ -0,0 +1,193 @@
++# Code Review Request: Itch.io Creators Scraper
++
++## Project Overview
++
++This is a Python web scraper designed to collect and analyze data about game creators on itch.io. The system monitors new game releases, builds comprehensive creator profiles, enriches game data with ratings, and calculates creator rankings using Bayesian averaging.
++
++## Review Focus Areas
++
++Please focus your review on:
++
++1. **Code Quality and Python Best Practices**
++   - Proper use of async/await patterns
++   - Code organization and modularity
++   - Naming conventions and readability
++   - Type hints and documentation
++   - Error handling patterns
++
++2. **Architecture and Design**
++   - Module separation and responsibilities
++   - Data flow between components
++   - Database schema design
++   - Extensibility and maintainability
++   - Design patterns usage
++
++3. **Security and Error Handling**
++   - SQL injection vulnerabilities
++   - Input validation and sanitization
++   - Error handling and recovery
++   - Rate limiting and politeness (for web scraping)
++   - Environment variable handling
++
++## System Architecture
++
++```
++┌─────────────┐
++│ Feed Poller │ ──> Monitors RSS feeds for new games
++└──────┬──────┘
++       │
++       ▼
++┌─────────────┐
++│  Database   │ <── PostgreSQL (creators, games, creator_scores)
++└──────┬──────┘
++       │
++       ▼
++┌─────────────┐
++│ Backfiller  │ ──> Scrapes complete game history for new creators
++└──────┬──────┘
++       │
++       ▼
++┌─────────────┐
++│  Enricher   │ ──> Fetches additional rating data for games
++└──────┬──────┘
++       │
++       ▼
++┌─────────────┐
++│   Scorer    │ ──> Calculates Bayesian scores for creator rankings
++└─────────────┘
++```
++
++## Key Components
++
++### 1. Feed Poller (`src/feed_poller.py`)
++- Fetches and parses itch.io RSS feeds
++- Deduplicates game entries
++- Extracts creator information from game URLs
++- Stores new games and creators in database
++
++### 2. Backfiller (`src/backfiller.py`)
++- Identifies creators who haven't been fully scraped
++- Scrapes creator profile pages for complete game lists
++- Updates database with historical game data
++
++### 3. Enricher (`src/enricher.py`)
++- Fetches additional rating information for games
++- Updates game records with rating counts and scores
++
++### 4. Scorer (`src/scorer.py`)
++- Implements Bayesian averaging for creator rankings
++- Formula: `(C * m + Σ(ratings)) / (C + game_count)`
++- Tracks game counts, total ratings, and average ratings
++
++### 5. Parsers (`src/parsers/`)
++- **profile.py**: Parses creator profile pages (BeautifulSoup)
++- **game.py**: Extracts game metadata and ratings
++
++### 6. Database Layer (`src/db.py`)
++- PostgreSQL connection management
++- Schema initialization
++- CRUD operations for creators, games, and scores
++
++### 7. Data Models (`src/models.py`)
++- `Game`: Game metadata (title, URL, ratings, publish date)
++- `Creator`: Creator profile information
++- `CreatorScore`: Calculated ranking metrics
++
++## Database Schema
++
++### `creators` Table
++- `id` (SERIAL PRIMARY KEY)
++- `name` (TEXT)
++- `profile_url` (TEXT UNIQUE)
++- `backfilled` (BOOLEAN) - Whether complete history has been scraped
++- `first_seen` (TIMESTAMP)
++- `updated_at` (TIMESTAMP)
++
++### `games` Table
++- `id` (SERIAL PRIMARY KEY)
++- `itch_id` (TEXT UNIQUE) - Extracted from game URL
++- `title` (TEXT)
++- `creator_id` (INTEGER FK → creators)
++- `url` (TEXT)
++- `publish_date` (DATE)
++- `rating` (FLOAT)
++- `rating_count` (INTEGER)
++- `scraped_at` (TIMESTAMP)
++
++### `creator_scores` Table
++- `id` (SERIAL PRIMARY KEY)
++- `creator_id` (INTEGER UNIQUE FK → creators)
++- `game_count` (INTEGER)
++- `total_ratings` (INTEGER)
++- `avg_rating` (FLOAT)
++- `bayesian_score` (FLOAT)
++
++## Specific Review Questions
++
++### Code Quality
++1. Are async patterns used correctly and efficiently?
++2. Is error handling comprehensive and appropriate?
++3. Are there any code smells or anti-patterns?
++4. Is the code well-documented and maintainable?
++
++### Architecture
++1. Is the module separation logical and well-organized?
++2. Are there any tight couplings that should be addressed?
++3. Is the database schema normalized appropriately?
++4. Could any components benefit from additional abstraction?
++
++### Security
++1. Are there SQL injection vulnerabilities in database queries?
++2. Is user input (URLs, game data) properly validated?
++3. Are environment variables handled securely?
++4. Are there any potential XSS risks in scraped HTML parsing?
++5. Is the scraper respectful of target site (rate limiting, user agent)?
++
++### Error Handling
++1. Are edge cases handled properly (missing data, malformed HTML)?
++2. Will the system gracefully handle network failures?
++3. Are database connection errors handled appropriately?
++4. Is there proper logging for debugging issues?
++
++## Dependencies
++
++Main libraries used:
++- `httpx`: Async HTTP client
++- `feedparser`: RSS feed parsing
++- `beautifulsoup4` + `lxml`: HTML parsing
++- `psycopg2-binary`: PostgreSQL database driver
++- `pytest` + `pytest-asyncio`: Testing framework
++
++## Test Coverage
++
++Test files exist for all major components:
++- Database operations
++- HTTP client
++- Feed poller
++- Backfiller
++- Enricher
++- Scorer
++- Profile parser
++- Game parser
++
++Please review test quality and coverage as part of your assessment.
++
++## CLI Interface
++
++The scraper provides these commands:
++- `python -m src init-db`: Initialize database schema
++- `python -m src poll`: Fetch new releases from RSS feeds
++- `python -m src backfill`: Scrape creator histories
++- `python -m src enrich`: Update game ratings
++- `python -m src score`: Recalculate creator rankings
++- `python -m src run`: Execute full pipeline
++
++## Additional Context
++
++This is a production-ready scraper intended for long-term data collection. The design prioritizes:
++- **Incrementality**: Each stage can run independently
++- **Resilience**: System should handle partial failures gracefully
++- **Efficiency**: Avoid re-scraping already collected data
++- **Extensibility**: Easy to add new data points or parsers
++
++Please provide feedback on any areas that could be improved for production deployment.
+diff --git a/docs/claude.md b/docs/claude.md
+new file mode 100644
+index 0000000..1f03dd3
+--- /dev/null
++++ b/docs/claude.md
+@@ -0,0 +1,127 @@
++# itch-creators
++
++A system for tracking itch.io game creators, monitoring new releases, and ranking creators by publishing frequency and game quality.
++
++## Documentation
++
++See `docs/IMPLEMENTATION-PLAN.md` for architecture, module specifications, data models, and build order.
++
++## Architecture Overview
++
++Two separate codebases sharing a database:
++
++```
++┌─────────────────────────────────────────────────────────────┐
++│                    Vercel Postgres                          │
++└─────────────────────────────────────────────────────────────┘
++        ▲                                       ▲
++        │ writes                                │ reads
++        │                                       │
++┌───────┴───────────┐                 ┌─────────┴─────────┐
++│  Python Scraper   │                 │  Next.js Frontend │
++│  (Railway/Render) │                 │     (Vercel)      │
++└───────────────────┘                 └───────────────────┘
++```
++
++**Python Scraper** — Runs on a schedule, polls RSS feeds, scrapes creator profiles and game pages, writes to Postgres. Lives in `/scraper` repo (or directory).
++
++**Next.js Frontend** — Reads from Postgres, displays ranked creators. Deployed on Vercel. Lives in `/web` repo (or directory).
++
++**Vercel Postgres** — Shared database. Both services connect via connection string in environment variables.
++
++## Tech Stack
++
++### Scraper (Python)
++- **Language:** Python 3.11+
++- **HTTP:** httpx
++- **RSS Parsing:** feedparser
++- **HTML Parsing:** BeautifulSoup4 with lxml
++- **Database:** psycopg2 or asyncpg for Postgres
++- **Testing:** pytest
++
++### Frontend (Next.js)
++- **Framework:** Next.js 14+ (App Router)
++- **Database:** Vercel Postgres (@vercel/postgres)
++- **Styling:** Tailwind CSS
++- **Deployment:** Vercel
++
++## Development Approach
++
++**Build one module at a time.** Complete each module with tests before moving to the next. Don't scaffold multiple modules at once.
++
++**Test against fixtures, not live sites.** Save sample HTML/XML to `tests/fixtures/`. Parsers should never hit itch.io during tests.
++
++**Keep modules isolated.** Each module should have clear inputs and outputs. Don't let implementation details leak across boundaries.
++
++**Wire it up last.** Only build orchestration and CLI entry points after individual modules are tested and working.
++
++**Scraper first, frontend second.** Get data flowing into Postgres before building the display layer.
++
++## Guardrails
++
++**Follow the implementation plan.** Don't add modules, change architecture, or introduce dependencies not specified in `docs/IMPLEMENTATION-PLAN.md`. If something seems missing, ask first.
++
++**No speculative files.** Only create files that are immediately needed for the current task. Don't scaffold ahead or create placeholder modules.
++
++**Don't modify unrelated code.** When working on a module, don't refactor or "improve" other modules unless explicitly asked.
++
++**Ask before adding dependencies.** If a task seems to require a library not in the tech stack, confirm before adding it.
++
++**Stick to the data models.** Use the schemas defined in the implementation plan. Don't add fields or create new models without discussion.
++
++**When uncertain, stop and ask.** If requirements are ambiguous or a task seems to conflict with the plan, clarify before proceeding.
++
++## Code Conventions
++
++### Python (Scraper)
++- Type hints on all function signatures
++- Dataclasses for structured data
++- One module per file in `src/`
++- Tests mirror source structure in `tests/`
++- No classes where functions suffice
++- Async for HTTP calls, sync otherwise
++
++### TypeScript (Frontend)
++- Strict mode enabled
++- Server components by default, client components only when needed
++- Database queries in server components or API routes only
++
++## Rate Limiting
++
++Be respectful to itch.io:
++- 2 second minimum delay between requests
++- Descriptive User-Agent header
++- Exponential backoff on 429s
++- No parallel requests to the same domain
++
++## Environment Variables
++
++Both services need database credentials:
++
++```
++# Vercel Postgres connection
++POSTGRES_URL=
++POSTGRES_URL_NON_POOLING=
++POSTGRES_USER=
++POSTGRES_HOST=
++POSTGRES_PASSWORD=
++POSTGRES_DATABASE=
++```
++
++## Useful Commands
++
++### Scraper
++```bash
++pytest                      # run tests
++python -m src.main poll     # fetch RSS feeds
++python -m src.main backfill # scrape new creator histories
++python -m src.main enrich   # scrape game ratings
++python -m src.main score    # recalculate rankings
++```
++
++### Frontend
++```bash
++npm run dev                 # local development
++npm run build               # production build
++vercel                      # deploy
++```
+diff --git a/docs/implementation-plan.md b/docs/implementation-plan.md
+new file mode 100644
+index 0000000..967f3a8
+--- /dev/null
++++ b/docs/implementation-plan.md
+@@ -0,0 +1,323 @@
++# Implementation Plan
++
++## Project Purpose
++
++Monitor itch.io for new game releases, identify active creators, backfill their historical catalogs, and rank them by publishing frequency and game quality (measured by ratings volume using Bayesian averaging).
++
++---
++
++## System Architecture
++
++### Overview
++
++Hybrid approach: RSS feeds for discovery, targeted scraping for enrichment. Two codebases sharing a Postgres database.
++
++```
++RSS Feeds → New Games → Creator Discovery → Profile Backfill → Game Detail Enrichment → Scoring → Web Display
++```
++
++### Components
++
++| Component | Language | Hosting | Purpose |
++|-----------|----------|---------|---------|
++| Scraper | Python | Railway/Render | Data ingestion, runs on schedule |
++| Frontend | Next.js | Vercel | Display ranked creators |
++| Database | Postgres | Vercel Postgres | Shared data store |
++
++---
++
++## Data Models
++
++### Database Schema
++
++```sql
++CREATE TABLE creators (
++    id SERIAL PRIMARY KEY,
++    name VARCHAR(255) UNIQUE NOT NULL,
++    profile_url VARCHAR(512) NOT NULL,
++    backfilled BOOLEAN DEFAULT FALSE,
++    first_seen TIMESTAMP DEFAULT NOW(),
++    updated_at TIMESTAMP DEFAULT NOW()
++);
++
++CREATE TABLE games (
++    id SERIAL PRIMARY KEY,
++    itch_id VARCHAR(255) UNIQUE,
++    title VARCHAR(512) NOT NULL,
++    creator_id INTEGER REFERENCES creators(id),
++    url VARCHAR(512) NOT NULL,
++    publish_date DATE,
++    rating DECIMAL(3,2),
++    rating_count INTEGER DEFAULT 0,
++    scraped_at TIMESTAMP,
++    created_at TIMESTAMP DEFAULT NOW()
++);
++
++CREATE TABLE creator_scores (
++    id SERIAL PRIMARY KEY,
++    creator_id INTEGER REFERENCES creators(id) UNIQUE,
++    game_count INTEGER DEFAULT 0,
++    total_ratings INTEGER DEFAULT 0,
++    avg_rating DECIMAL(3,2),
++    bayesian_score DECIMAL(5,4),
++    calculated_at TIMESTAMP DEFAULT NOW()
++);
++
++CREATE INDEX idx_games_creator ON games(creator_id);
++CREATE INDEX idx_scores_bayesian ON creator_scores(bayesian_score DESC);
++```
++
++### Python Dataclasses
++
++```python
++@dataclass
++class Game:
++    id: int | None
++    itch_id: str
++    title: str
++    creator_name: str
++    url: str
++    publish_date: date | None
++    rating: float | None
++    rating_count: int
++    scraped_at: datetime | None
++
++@dataclass
++class Creator:
++    id: int | None
++    name: str
++    profile_url: str
++    backfilled: bool
++    first_seen: datetime
++
++@dataclass
++class CreatorScore:
++    creator_id: int
++    game_count: int
++    total_ratings: int
++    avg_rating: float
++    bayesian_score: float
++```
++
++---
++
++## Scraper Modules
++
++Build in this order. Complete each with tests before proceeding.
++
++### 1. `src/db.py` — Database Connection
++
++**Purpose:** Manage Postgres connections and provide CRUD operations.
++
++**Functions:**
++- `get_connection()` → connection context manager
++- `create_tables()` → initialize schema
++- `insert_creator(creator)` → returns id
++- `insert_game(game)` → returns id
++- `get_creator_by_name(name)` → Creator or None
++- `get_unbackfilled_creators()` → list of Creators
++- `get_unenriched_games()` → list of Games
++- `update_game_ratings(game_id, rating, rating_count)`
++- `mark_creator_backfilled(creator_id)`
++- `upsert_creator_score(score)`
++
++**Dependencies:** psycopg2 or asyncpg
++
++---
++
++### 2. `src/http_client.py` — Rate-Limited HTTP
++
++**Purpose:** Handle all HTTP requests with rate limiting and retries.
++
++**Functions:**
++- `fetch(url)` → raw HTML string
++- Enforces 2-second delay between requests
++- Retries with exponential backoff on 429/5xx
++- Sets descriptive User-Agent
++
++**Dependencies:** httpx
++
++---
++
++### 3. `src/feed_poller.py` — RSS Parsing
++
++**Purpose:** Fetch and parse itch.io RSS feeds.
++
++**Functions:**
++- `poll_feed(feed_url)` → list of dicts with title, creator, game_url, publish_date
++- `get_new_releases()` → polls default feeds, returns new games
++
++**Key URLs:**
++- `https://itch.io/games.xml`
++- `https://itch.io/games/newest.xml`
++
++**Dependencies:** feedparser
++
++---
++
++### 4. `src/parsers/profile.py` — Creator Profile Parser
++
++**Purpose:** Extract game list from creator profile pages.
++
++**Functions:**
++- `parse_profile(html)` → list of dicts with title, url, publish_date
++
++**Target URL pattern:** `https://{username}.itch.io`
++
++**Dependencies:** BeautifulSoup4
++
++---
++
++### 5. `src/parsers/game.py` — Game Page Parser
++
++**Purpose:** Extract ratings from individual game pages.
++
++**Functions:**
++- `parse_game(html)` → dict with rating, rating_count (or None if hidden)
++
++**Target URL pattern:** `https://{username}.itch.io/{game-slug}`
++
++**Dependencies:** BeautifulSoup4
++
++---
++
++### 6. `src/backfiller.py` — Creator History Backfill
++
++**Purpose:** Orchestrate fetching creator profiles and storing historical games.
++
++**Functions:**
++- `backfill_creator(creator)` → fetches profile, inserts games, marks backfilled
++- `backfill_all()` → processes all unbackfilled creators
++
++**Uses:** http_client, parsers/profile, db
++
++---
++
++### 7. `src/enricher.py` — Game Ratings Enrichment
++
++**Purpose:** Orchestrate fetching game pages and updating ratings.
++
++**Functions:**
++- `enrich_game(game)` → fetches page, updates ratings in db
++- `enrich_all()` → processes all unenriched games
++
++**Uses:** http_client, parsers/game, db
++
++---
++
++### 8. `src/scorer.py` — Ranking Calculations
++
++**Purpose:** Calculate creator scores using Bayesian averaging.
++
++**Functions:**
++- `calculate_bayesian_score(avg_rating, rating_count, global_avg, min_votes)` → float
++- `score_creator(creator_id)` → CreatorScore
++- `score_all()` → recalculates all scores
++
++**Bayesian formula:**
++```
++weighted_score = (rating_count / (rating_count + min_votes)) * avg_rating
++               + (min_votes / (rating_count + min_votes)) * global_avg
++```
++
++**Uses:** db
++
++---
++
++### 9. `src/main.py` — CLI Entry Point
++
++**Purpose:** Tie modules together with CLI commands.
++
++**Commands:**
++- `poll` — run feed poller, insert new games and creators
++- `backfill` — process unbackfilled creators
++- `enrich` — fetch ratings for unenriched games
++- `score` — recalculate all creator scores
++- `run` — execute full pipeline (poll → backfill → enrich → score)
++
++**Uses:** all modules
++
++---
++
++## Frontend Pages
++
++Build after scraper is complete and data is flowing.
++
++### 1. Home Page (`/`)
++
++Display ranked list of creators with:
++- Rank
++- Creator name (links to itch.io profile)
++- Game count
++- Total ratings
++- Bayesian score
++
++Server component that queries Postgres directly.
++
++### 2. Creator Detail Page (`/creator/[name]`)
++
++Display single creator with:
++- Profile info
++- List of all their games with individual ratings
++- Score breakdown
++
++---
++
++## Build Order
++
++### Phase 1: Scraper Foundation
++1. `src/db.py` + schema migration
++2. `src/http_client.py`
++3. `src/feed_poller.py`
++
++### Phase 2: Parsers
++4. `src/parsers/profile.py`
++5. `src/parsers/game.py`
++
++### Phase 3: Orchestration
++6. `src/backfiller.py`
++7. `src/enricher.py`
++8. `src/scorer.py`
++9. `src/main.py`
++
++### Phase 4: Deployment
++10. Deploy scraper to Railway/Render
++11. Set up cron schedule (hourly or daily)
++
++### Phase 5: Frontend
++12. Next.js project setup with Vercel Postgres
++13. Home page with ranked list
++14. Creator detail page
++15. Deploy to Vercel
++
++---
++
++## Testing Strategy
++
++### Fixtures
++
++Save sample HTML/XML in `tests/fixtures/`:
++- `feed_sample.xml` — RSS feed response
++- `profile_sample.html` — creator profile page
++- `game_sample.html` — game page with ratings
++- `game_no_ratings.html` — game page with hidden ratings
++
++### Test Coverage
++
++Each module should have tests for:
++- Happy path
++- Edge cases (missing data, malformed input)
++- Error handling
++
++Parsers test against fixtures only—never hit live sites in tests.
++
++---
++
++## What NOT To Build
++
++- User accounts or authentication
++- Real-time updates (scheduled polling is sufficient)
++- Complex filtering UI (start with a single ranked list)
++- Proxy rotation or anti-detection
++- Full-text search
++- Mobile app
+diff --git a/requirements.txt b/requirements.txt
+new file mode 100644
+index 0000000..c4c8d51
+--- /dev/null
++++ b/requirements.txt
+@@ -0,0 +1,12 @@
++# HTTP and scraping
++httpx==0.27.0
++feedparser==6.0.11
++beautifulsoup4==4.12.3
++lxml==5.1.0
++
++# Database
++psycopg2-binary==2.9.9
++
++# Testing
++pytest==8.0.0
++pytest-asyncio==0.23.5
+diff --git a/src/__init__.py b/src/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/__main__.py b/src/__main__.py
+new file mode 100644
+index 0000000..c989001
+--- /dev/null
++++ b/src/__main__.py
+@@ -0,0 +1,5 @@
++"""Allow running module as: python -m src"""
++from .main import main
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/backfiller.py b/src/backfiller.py
+new file mode 100644
+index 0000000..cfd1aa1
+--- /dev/null
++++ b/src/backfiller.py
+@@ -0,0 +1,109 @@
++from datetime import datetime
++
++from . import db
++from .http_client import fetch
++from .models import Creator, Game
++from .parsers import profile
++
++
++def backfill_creator(creator: Creator) -> int:
++    """
++    Fetch a creator's profile and backfill their game history.
++
++    Args:
++        creator: Creator object to backfill
++
++    Returns:
++        Number of games inserted
++
++    Raises:
++        Exception: If profile fetching fails
++    """
++    # Fetch the creator's profile page
++    html = fetch(creator.profile_url)
++
++    # Parse games from profile
++    games = profile.parse_profile(html)
++
++    # Insert games into database
++    inserted_count = 0
++    for game_data in games:
++        # Extract itch_id from URL
++        # Example: https://testdev.itch.io/cool-game -> cool-game
++        itch_id = _extract_game_id(game_data["url"])
++
++        game = Game(
++            id=None,
++            itch_id=itch_id,
++            title=game_data["title"],
++            creator_name=creator.name,
++            url=game_data["url"],
++            publish_date=game_data["publish_date"].date() if game_data["publish_date"] else None,
++            rating=None,
++            rating_count=0,
++            scraped_at=None
++        )
++
++        game_id = db.insert_game(game)
++        if game_id:
++            inserted_count += 1
++
++    # Mark creator as backfilled
++    db.mark_creator_backfilled(creator.id)
++
++    return inserted_count
++
++
++def backfill_all() -> dict[str, int]:
++    """
++    Process all unbackfilled creators.
++
++    Returns:
++        Dictionary with stats: {creators_processed, games_inserted, errors}
++    """
++    stats = {
++        "creators_processed": 0,
++        "games_inserted": 0,
++        "errors": 0,
++    }
++
++    creators = db.get_unbackfilled_creators()
++
++    for creator in creators:
++        try:
++            games_count = backfill_creator(creator)
++            stats["creators_processed"] += 1
++            stats["games_inserted"] += games_count
++        except Exception as e:
++            stats["errors"] += 1
++            # Log error but continue processing other creators
++            print(f"Error backfilling {creator.name}: {e}")
++
++    return stats
++
++
++def _extract_game_id(url: str) -> str:
++    """
++    Extract game slug from itch.io URL.
++
++    Example:
++        https://testdev.itch.io/cool-game -> cool-game
++        https://testdev.itch.io/cool-game?secret=xyz -> cool-game
++
++    Args:
++        url: Full game URL
++
++    Returns:
++        Game slug/ID
++    """
++    # Remove query parameters
++    url = url.split("?")[0]
++
++    # Get the path part
++    parts = url.split("/")
++
++    # Last part is the game slug
++    if len(parts) > 0:
++        return parts[-1]
++
++    return "unknown"
+diff --git a/src/db.py b/src/db.py
+new file mode 100644
+index 0000000..04c6973
+--- /dev/null
++++ b/src/db.py
+@@ -0,0 +1,269 @@
++import os
++from contextlib import contextmanager
++from datetime import datetime
++from typing import Iterator
++
++import psycopg2
++from psycopg2.extras import RealDictCursor
++
++from .models import Creator, CreatorScore, Game
++
++
++@contextmanager
++def get_connection() -> Iterator[psycopg2.extensions.connection]:
++    """Context manager for database connections."""
++    conn = psycopg2.connect(
++        dbname=os.getenv("POSTGRES_DATABASE"),
++        user=os.getenv("POSTGRES_USER"),
++        password=os.getenv("POSTGRES_PASSWORD"),
++        host=os.getenv("POSTGRES_HOST"),
++    )
++    try:
++        yield conn
++        conn.commit()
++    except Exception:
++        conn.rollback()
++        raise
++    finally:
++        conn.close()
++
++
++def create_tables() -> None:
++    """Initialize database schema."""
++    with get_connection() as conn:
++        cursor = conn.cursor()
++
++        cursor.execute("""
++            CREATE TABLE IF NOT EXISTS creators (
++                id SERIAL PRIMARY KEY,
++                name VARCHAR(255) UNIQUE NOT NULL,
++                profile_url VARCHAR(512) NOT NULL,
++                backfilled BOOLEAN DEFAULT FALSE,
++                first_seen TIMESTAMP DEFAULT NOW(),
++                updated_at TIMESTAMP DEFAULT NOW()
++            )
++        """)
++
++        cursor.execute("""
++            CREATE TABLE IF NOT EXISTS games (
++                id SERIAL PRIMARY KEY,
++                itch_id VARCHAR(255) UNIQUE,
++                title VARCHAR(512) NOT NULL,
++                creator_id INTEGER REFERENCES creators(id),
++                url VARCHAR(512) NOT NULL,
++                publish_date DATE,
++                rating DECIMAL(3,2),
++                rating_count INTEGER DEFAULT 0,
++                scraped_at TIMESTAMP,
++                created_at TIMESTAMP DEFAULT NOW()
++            )
++        """)
++
++        cursor.execute("""
++            CREATE TABLE IF NOT EXISTS creator_scores (
++                id SERIAL PRIMARY KEY,
++                creator_id INTEGER REFERENCES creators(id) UNIQUE,
++                game_count INTEGER DEFAULT 0,
++                total_ratings INTEGER DEFAULT 0,
++                avg_rating DECIMAL(3,2),
++                bayesian_score DECIMAL(5,4),
++                calculated_at TIMESTAMP DEFAULT NOW()
++            )
++        """)
++
++        cursor.execute("""
++            CREATE INDEX IF NOT EXISTS idx_games_creator ON games(creator_id)
++        """)
++
++        cursor.execute("""
++            CREATE INDEX IF NOT EXISTS idx_scores_bayesian
++            ON creator_scores(bayesian_score DESC)
++        """)
++
++        cursor.close()
++
++
++def insert_creator(creator: Creator) -> int:
++    """Insert a creator and return their ID."""
++    with get_connection() as conn:
++        cursor = conn.cursor()
++        cursor.execute(
++            """
++            INSERT INTO creators (name, profile_url, backfilled, first_seen)
++            VALUES (%s, %s, %s, %s)
++            ON CONFLICT (name) DO NOTHING
++            RETURNING id
++            """,
++            (creator.name, creator.profile_url, creator.backfilled, creator.first_seen)
++        )
++        result = cursor.fetchone()
++        cursor.close()
++
++        if result:
++            return result[0]
++
++        # If conflict occurred, fetch existing ID
++        cursor = conn.cursor()
++        cursor.execute("SELECT id FROM creators WHERE name = %s", (creator.name,))
++        result = cursor.fetchone()
++        cursor.close()
++        return result[0] if result else None
++
++
++def insert_game(game: Game) -> int:
++    """Insert a game and return its ID."""
++    with get_connection() as conn:
++        cursor = conn.cursor()
++
++        # First get creator_id
++        cursor.execute("SELECT id FROM creators WHERE name = %s", (game.creator_name,))
++        creator_result = cursor.fetchone()
++        creator_id = creator_result[0] if creator_result else None
++
++        cursor.execute(
++            """
++            INSERT INTO games (
++                itch_id, title, creator_id, url, publish_date,
++                rating, rating_count, scraped_at
++            )
++            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
++            ON CONFLICT (itch_id) DO NOTHING
++            RETURNING id
++            """,
++            (
++                game.itch_id, game.title, creator_id, game.url,
++                game.publish_date, game.rating, game.rating_count, game.scraped_at
++            )
++        )
++        result = cursor.fetchone()
++        cursor.close()
++
++        if result:
++            return result[0]
++
++        # If conflict occurred, fetch existing ID
++        cursor = conn.cursor()
++        cursor.execute("SELECT id FROM games WHERE itch_id = %s", (game.itch_id,))
++        result = cursor.fetchone()
++        cursor.close()
++        return result[0] if result else None
++
++
++def get_creator_by_name(name: str) -> Creator | None:
++    """Fetch a creator by name."""
++    with get_connection() as conn:
++        cursor = conn.cursor(cursor_factory=RealDictCursor)
++        cursor.execute("SELECT * FROM creators WHERE name = %s", (name,))
++        row = cursor.fetchone()
++        cursor.close()
++
++        if not row:
++            return None
++
++        return Creator(
++            id=row["id"],
++            name=row["name"],
++            profile_url=row["profile_url"],
++            backfilled=row["backfilled"],
++            first_seen=row["first_seen"]
++        )
++
++
++def get_unbackfilled_creators() -> list[Creator]:
++    """Fetch all creators that haven't been backfilled."""
++    with get_connection() as conn:
++        cursor = conn.cursor(cursor_factory=RealDictCursor)
++        cursor.execute("SELECT * FROM creators WHERE backfilled = FALSE")
++        rows = cursor.fetchall()
++        cursor.close()
++
++        return [
++            Creator(
++                id=row["id"],
++                name=row["name"],
++                profile_url=row["profile_url"],
++                backfilled=row["backfilled"],
++                first_seen=row["first_seen"]
++            )
++            for row in rows
++        ]
++
++
++def get_unenriched_games() -> list[Game]:
++    """Fetch all games that haven't been scraped for ratings."""
++    with get_connection() as conn:
++        cursor = conn.cursor(cursor_factory=RealDictCursor)
++        cursor.execute("""
++            SELECT g.*, c.name as creator_name
++            FROM games g
++            JOIN creators c ON g.creator_id = c.id
++            WHERE g.scraped_at IS NULL
++        """)
++        rows = cursor.fetchall()
++        cursor.close()
++
++        return [
++            Game(
++                id=row["id"],
++                itch_id=row["itch_id"],
++                title=row["title"],
++                creator_name=row["creator_name"],
++                url=row["url"],
++                publish_date=row["publish_date"],
++                rating=float(row["rating"]) if row["rating"] else None,
++                rating_count=row["rating_count"],
++                scraped_at=row["scraped_at"]
++            )
++            for row in rows
++        ]
++
++
++def update_game_ratings(game_id: int, rating: float | None, rating_count: int) -> None:
++    """Update game ratings and mark as scraped."""
++    with get_connection() as conn:
++        cursor = conn.cursor()
++        cursor.execute(
++            """
++            UPDATE games
++            SET rating = %s, rating_count = %s, scraped_at = %s
++            WHERE id = %s
++            """,
++            (rating, rating_count, datetime.now(), game_id)
++        )
++        cursor.close()
++
++
++def mark_creator_backfilled(creator_id: int) -> None:
++    """Mark a creator as backfilled."""
++    with get_connection() as conn:
++        cursor = conn.cursor()
++        cursor.execute(
++            "UPDATE creators SET backfilled = TRUE, updated_at = %s WHERE id = %s",
++            (datetime.now(), creator_id)
++        )
++        cursor.close()
++
++
++def upsert_creator_score(score: CreatorScore) -> None:
++    """Insert or update a creator's score."""
++    with get_connection() as conn:
++        cursor = conn.cursor()
++        cursor.execute(
++            """
++            INSERT INTO creator_scores (
++                creator_id, game_count, total_ratings, avg_rating, bayesian_score, calculated_at
++            )
++            VALUES (%s, %s, %s, %s, %s, %s)
++            ON CONFLICT (creator_id) DO UPDATE SET
++                game_count = EXCLUDED.game_count,
++                total_ratings = EXCLUDED.total_ratings,
++                avg_rating = EXCLUDED.avg_rating,
++                bayesian_score = EXCLUDED.bayesian_score,
++                calculated_at = EXCLUDED.calculated_at
++            """,
++            (
++                score.creator_id, score.game_count, score.total_ratings,
++                score.avg_rating, score.bayesian_score, datetime.now()
++            )
++        )
++        cursor.close()
+diff --git a/src/enricher.py b/src/enricher.py
+new file mode 100644
+index 0000000..957b316
+--- /dev/null
++++ b/src/enricher.py
+@@ -0,0 +1,59 @@
++from . import db
++from .http_client import fetch
++from .models import Game
++from .parsers import game as game_parser
++
++
++def enrich_game(game: Game) -> bool:
++    """
++    Fetch a game's page and update its rating information.
++
++    Args:
++        game: Game object to enrich
++
++    Returns:
++        True if successful, False otherwise
++
++    Raises:
++        Exception: If page fetching fails
++    """
++    # Fetch the game page
++    html = fetch(game.url)
++
++    # Parse ratings from page
++    rating_data = game_parser.parse_game(html)
++
++    # Update in database
++    db.update_game_ratings(
++        game_id=game.id,
++        rating=rating_data["rating"],
++        rating_count=rating_data["rating_count"]
++    )
++
++    return True
++
++
++def enrich_all() -> dict[str, int]:
++    """
++    Process all unenriched games.
++
++    Returns:
++        Dictionary with stats: {games_processed, errors}
++    """
++    stats = {
++        "games_processed": 0,
++        "errors": 0,
++    }
++
++    games = db.get_unenriched_games()
++
++    for game in games:
++        try:
++            enrich_game(game)
++            stats["games_processed"] += 1
++        except Exception as e:
++            stats["errors"] += 1
++            # Log error but continue processing other games
++            print(f"Error enriching {game.title} ({game.url}): {e}")
++
++    return stats
+diff --git a/src/feed_poller.py b/src/feed_poller.py
+new file mode 100644
+index 0000000..fb92261
+--- /dev/null
++++ b/src/feed_poller.py
+@@ -0,0 +1,104 @@
++from datetime import datetime
++from typing import TypedDict
++
++import feedparser
++
++from .http_client import fetch
++
++
++class FeedEntry(TypedDict):
++    """Represents a game from an RSS feed."""
++    title: str
++    creator: str
++    game_url: str
++    publish_date: datetime | None
++
++
++_default_feeds = [
++    "https://itch.io/games.xml",
++    "https://itch.io/games/newest.xml",
++]
++
++
++def poll_feed(feed_url: str) -> list[FeedEntry]:
++    """
++    Fetch and parse an itch.io RSS feed.
++
++    Args:
++        feed_url: URL of the RSS feed to fetch
++
++    Returns:
++        List of dictionaries containing game information
++    """
++    xml_content = fetch(feed_url)
++    feed = feedparser.parse(xml_content)
++
++    entries: list[FeedEntry] = []
++
++    for entry in feed.entries:
++        # Extract creator from the link
++        # itch.io URLs are typically: https://{creator}.itch.io/{game}
++        creator = _extract_creator_from_url(entry.link)
++
++        # Parse publish date if available
++        publish_date = None
++        if hasattr(entry, "published_parsed") and entry.published_parsed:
++            publish_date = datetime(*entry.published_parsed[:6])
++
++        entries.append({
++            "title": entry.title,
++            "creator": creator,
++            "game_url": entry.link,
++            "publish_date": publish_date,
++        })
++
++    return entries
++
++
++def get_new_releases() -> list[FeedEntry]:
++    """
++    Poll default itch.io feeds for new game releases.
++
++    Returns:
++        Combined list of games from all feeds (deduplicated by URL)
++    """
++    all_entries: list[FeedEntry] = []
++    seen_urls: set[str] = set()
++
++    for feed_url in _default_feeds:
++        entries = poll_feed(feed_url)
++
++        for entry in entries:
++            # Deduplicate by URL
++            if entry["game_url"] not in seen_urls:
++                all_entries.append(entry)
++                seen_urls.add(entry["game_url"])
++
++    return all_entries
++
++
++def _extract_creator_from_url(url: str) -> str:
++    """
++    Extract creator username from itch.io URL.
++
++    Example:
++        https://testdev.itch.io/cool-game -> testdev
++
++    Args:
++        url: Full game URL
++
++    Returns:
++        Creator username
++    """
++    # Remove protocol
++    without_protocol = url.split("://", 1)[-1]
++
++    # Get the subdomain (creator name)
++    parts = without_protocol.split(".")
++
++    if len(parts) >= 3 and parts[1] == "itch" and parts[2].startswith("io"):
++        return parts[0]
++
++    # Fallback: extract from path structure if needed
++    # Some itch URLs might be itch.io/profile/creator/game
++    return "unknown"
+diff --git a/src/http_client.py b/src/http_client.py
+new file mode 100644
+index 0000000..285dba7
+--- /dev/null
++++ b/src/http_client.py
+@@ -0,0 +1,81 @@
++import time
++from typing import Optional
++
++import httpx
++
++
++# Track last request time for rate limiting
++_last_request_time: Optional[float] = None
++_min_delay_seconds = 2.0
++_user_agent = "itch-creators-scraper/1.0 (Educational project for ranking game creators)"
++
++
++def fetch(url: str, max_retries: int = 3) -> str:
++    """
++    Fetch HTML from a URL with rate limiting and retries.
++
++    Args:
++        url: The URL to fetch
++        max_retries: Maximum number of retry attempts
++
++    Returns:
++        Raw HTML string
++
++    Raises:
++        httpx.HTTPError: If request fails after all retries
++    """
++    global _last_request_time
++
++    # Enforce rate limiting
++    if _last_request_time is not None:
++        elapsed = time.time() - _last_request_time
++        if elapsed < _min_delay_seconds:
++            time.sleep(_min_delay_seconds - elapsed)
++
++    headers = {"User-Agent": _user_agent}
++
++    for attempt in range(max_retries):
++        try:
++            _last_request_time = time.time()
++
++            response = httpx.get(url, headers=headers, timeout=30.0, follow_redirects=True)
++
++            # Success
++            if response.status_code == 200:
++                return response.text
++
++            # Rate limited - exponential backoff
++            if response.status_code == 429:
++                wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s
++                time.sleep(wait_time)
++                continue
++
++            # Server error - retry with backoff
++            if 500 <= response.status_code < 600:
++                wait_time = (2 ** attempt) * 2
++                time.sleep(wait_time)
++                continue
++
++            # Other errors - don't retry, raise immediately
++            response.raise_for_status()
++
++        except httpx.HTTPStatusError:
++            # Client errors (4xx) - don't retry
++            raise
++
++        except httpx.TimeoutException:
++            if attempt < max_retries - 1:
++                wait_time = (2 ** attempt) * 2
++                time.sleep(wait_time)
++                continue
++            raise
++
++        except httpx.HTTPError as e:
++            if attempt < max_retries - 1:
++                wait_time = (2 ** attempt) * 2
++                time.sleep(wait_time)
++                continue
++            raise
++
++    # If we get here, all retries failed
++    raise httpx.HTTPError(f"Failed to fetch {url} after {max_retries} attempts")
+diff --git a/src/main.py b/src/main.py
+new file mode 100644
+index 0000000..18560ae
+--- /dev/null
++++ b/src/main.py
+@@ -0,0 +1,209 @@
++#!/usr/bin/env python3
++"""
++CLI entry point for itch-creators scraper.
++"""
++import argparse
++import sys
++from datetime import datetime
++
++from . import backfiller, db, enricher, feed_poller, scorer
++from .models import Creator
++
++
++def cmd_poll(args):
++    """Poll RSS feeds for new games and creators."""
++    print("Polling RSS feeds...")
++
++    entries = feed_poller.get_new_releases()
++    print(f"Found {len(entries)} new releases")
++
++    new_creators = 0
++    new_games = 0
++
++    for entry in entries:
++        # Check if creator exists, if not create them
++        creator = db.get_creator_by_name(entry["creator"])
++
++        if not creator:
++            # Extract profile URL from game URL
++            profile_url = _extract_profile_url(entry["game_url"])
++
++            creator = Creator(
++                id=None,
++                name=entry["creator"],
++                profile_url=profile_url,
++                backfilled=False,
++                first_seen=datetime.now()
++            )
++
++            creator_id = db.insert_creator(creator)
++            if creator_id:
++                new_creators += 1
++                print(f"  New creator: {entry['creator']}")
++
++        # Extract game ID from URL
++        game_id = backfiller._extract_game_id(entry["game_url"])
++
++        # Create game object
++        from .models import Game
++        game = Game(
++            id=None,
++            itch_id=game_id,
++            title=entry["title"],
++            creator_name=entry["creator"],
++            url=entry["game_url"],
++            publish_date=entry["publish_date"].date() if entry["publish_date"] else None,
++            rating=None,
++            rating_count=0,
++            scraped_at=None
++        )
++
++        inserted_id = db.insert_game(game)
++        if inserted_id:
++            new_games += 1
++
++    print(f"\nResults:")
++    print(f"  New creators: {new_creators}")
++    print(f"  New games: {new_games}")
++
++
++def cmd_backfill(args):
++    """Backfill creator game histories."""
++    print("Backfilling creators...")
++
++    stats = backfiller.backfill_all()
++
++    print(f"\nResults:")
++    print(f"  Creators processed: {stats['creators_processed']}")
++    print(f"  Games inserted: {stats['games_inserted']}")
++    print(f"  Errors: {stats['errors']}")
++
++
++def cmd_enrich(args):
++    """Enrich games with ratings."""
++    print("Enriching game ratings...")
++
++    stats = enricher.enrich_all()
++
++    print(f"\nResults:")
++    print(f"  Games processed: {stats['games_processed']}")
++    print(f"  Errors: {stats['errors']}")
++
++
++def cmd_score(args):
++    """Recalculate creator scores."""
++    print("Calculating creator scores...")
++
++    stats = scorer.score_all()
++
++    print(f"\nResults:")
++    print(f"  Creators scored: {stats['creators_scored']}")
++
++
++def cmd_run(args):
++    """Run full pipeline: poll → backfill → enrich → score."""
++    print("Running full pipeline...\n")
++
++    print("=" * 50)
++    cmd_poll(args)
++
++    print("\n" + "=" * 50)
++    cmd_backfill(args)
++
++    print("\n" + "=" * 50)
++    cmd_enrich(args)
++
++    print("\n" + "=" * 50)
++    cmd_score(args)
++
++    print("\n" + "=" * 50)
++    print("Pipeline complete!")
++
++
++def cmd_init_db(args):
++    """Initialize database schema."""
++    print("Initializing database...")
++    db.create_tables()
++    print("Database initialized successfully!")
++
++
++def _extract_profile_url(game_url: str) -> str:
++    """
++    Extract creator profile URL from game URL.
++
++    Example:
++        https://testdev.itch.io/cool-game -> https://testdev.itch.io
++
++    Args:
++        game_url: Full game URL
++
++    Returns:
++        Profile URL
++    """
++    parts = game_url.split("/")
++    if len(parts) >= 3:
++        # Reconstruct: protocol + // + domain
++        return f"{parts[0]}//{parts[2]}"
++    return game_url
++
++
++def main():
++    """Main CLI entry point."""
++    parser = argparse.ArgumentParser(
++        description="itch.io creator ranking scraper",
++        formatter_class=argparse.RawDescriptionHelpFormatter,
++    )
++
++    subparsers = parser.add_subparsers(dest="command", help="Available commands")
++
++    # init-db command
++    subparsers.add_parser("init-db", help="Initialize database schema")
++
++    # poll command
++    subparsers.add_parser("poll", help="Poll RSS feeds for new releases")
++
++    # backfill command
++    subparsers.add_parser("backfill", help="Backfill creator game histories")
++
++    # enrich command
++    subparsers.add_parser("enrich", help="Enrich games with ratings")
++
++    # score command
++    subparsers.add_parser("score", help="Recalculate creator scores")
++
++    # run command
++    subparsers.add_parser("run", help="Run full pipeline")
++
++    args = parser.parse_args()
++
++    if not args.command:
++        parser.print_help()
++        sys.exit(1)
++
++    # Execute command
++    commands = {
++        "init-db": cmd_init_db,
++        "poll": cmd_poll,
++        "backfill": cmd_backfill,
++        "enrich": cmd_enrich,
++        "score": cmd_score,
++        "run": cmd_run,
++    }
++
++    command_func = commands.get(args.command)
++    if command_func:
++        try:
++            command_func(args)
++        except KeyboardInterrupt:
++            print("\n\nInterrupted by user")
++            sys.exit(1)
++        except Exception as e:
++            print(f"\nError: {e}", file=sys.stderr)
++            sys.exit(1)
++    else:
++        parser.print_help()
++        sys.exit(1)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/models.py b/src/models.py
+new file mode 100644
+index 0000000..a976c41
+--- /dev/null
++++ b/src/models.py
+@@ -0,0 +1,33 @@
++from dataclasses import dataclass
++from datetime import date, datetime
++
++
++@dataclass
++class Game:
++    id: int | None
++    itch_id: str
++    title: str
++    creator_name: str
++    url: str
++    publish_date: date | None
++    rating: float | None
++    rating_count: int
++    scraped_at: datetime | None
++
++
++@dataclass
++class Creator:
++    id: int | None
++    name: str
++    profile_url: str
++    backfilled: bool
++    first_seen: datetime
++
++
++@dataclass
++class CreatorScore:
++    creator_id: int
++    game_count: int
++    total_ratings: int
++    avg_rating: float
++    bayesian_score: float
+diff --git a/src/parsers/__init__.py b/src/parsers/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/parsers/game.py b/src/parsers/game.py
+new file mode 100644
+index 0000000..1cde26b
+--- /dev/null
++++ b/src/parsers/game.py
+@@ -0,0 +1,50 @@
++from typing import TypedDict
++
++from bs4 import BeautifulSoup
++
++
++class GameRating(TypedDict):
++    """Represents rating information extracted from a game page."""
++    rating: float | None
++    rating_count: int
++
++
++def parse_game(html: str) -> GameRating:
++    """
++    Extract rating information from a game page.
++
++    Args:
++        html: Raw HTML of the game page
++
++    Returns:
++        Dictionary with rating and rating_count (None if ratings are hidden)
++    """
++    soup = BeautifulSoup(html, "lxml")
++
++    # Look for the aggregate rating widget
++    aggregate_rating = soup.find("div", class_="aggregate_rating", itemtype="http://schema.org/AggregateRating")
++
++    if not aggregate_rating:
++        # No ratings available or hidden
++        return {
++            "rating": None,
++            "rating_count": 0,
++        }
++
++    # Extract rating value
++    rating_value = aggregate_rating.find("span", itemprop="ratingValue")
++    rating = float(rating_value.get_text(strip=True)) if rating_value else None
++
++    # Extract rating count
++    rating_count_span = aggregate_rating.find("span", itemprop="ratingCount")
++    rating_count = 0
++    if rating_count_span:
++        try:
++            rating_count = int(rating_count_span.get_text(strip=True))
++        except ValueError:
++            rating_count = 0
++
++    return {
++        "rating": rating,
++        "rating_count": rating_count,
++    }
+diff --git a/src/parsers/profile.py b/src/parsers/profile.py
+new file mode 100644
+index 0000000..0d923af
+--- /dev/null
++++ b/src/parsers/profile.py
+@@ -0,0 +1,84 @@
++from datetime import datetime
++from typing import TypedDict
++
++from bs4 import BeautifulSoup
++
++
++class ProfileGame(TypedDict):
++    """Represents a game found on a creator's profile."""
++    title: str
++    url: str
++    publish_date: datetime | None
++
++
++def parse_profile(html: str) -> list[ProfileGame]:
++    """
++    Extract list of games from a creator's profile page.
++
++    Args:
++        html: Raw HTML of the profile page
++
++    Returns:
++        List of dictionaries containing game information
++    """
++    soup = BeautifulSoup(html, "lxml")
++    games: list[ProfileGame] = []
++
++    # Find all game cells
++    game_cells = soup.find_all("div", class_="game_cell")
++
++    for cell in game_cells:
++        # Extract title and URL
++        title_link = cell.find("a", class_="game_link")
++        if not title_link:
++            continue
++
++        title = title_link.get_text(strip=True)
++        url = title_link.get("href", "")
++
++        # Extract publish date if available
++        publish_date = None
++        published_at = cell.find("div", class_="published_at")
++        if published_at:
++            date_text = published_at.get_text(strip=True)
++            publish_date = _parse_date_text(date_text)
++
++        games.append({
++            "title": title,
++            "url": url,
++            "publish_date": publish_date,
++        })
++
++    return games
++
++
++def _parse_date_text(text: str) -> datetime | None:
++    """
++    Parse date from itch.io format.
++
++    Example formats:
++        "Published Jan 15, 2024"
++        "Jan 15, 2024"
++
++    Args:
++        text: Date text to parse
++
++    Returns:
++        Datetime object or None if parsing fails
++    """
++    # Remove "Published" prefix
++    text = text.replace("Published", "").strip()
++
++    try:
++        # Try parsing "Jan 15, 2024" format
++        return datetime.strptime(text, "%b %d, %Y")
++    except ValueError:
++        pass
++
++    try:
++        # Try alternative format "January 15, 2024"
++        return datetime.strptime(text, "%B %d, %Y")
++    except ValueError:
++        pass
++
++    return None
+diff --git a/src/scorer.py b/src/scorer.py
+new file mode 100644
+index 0000000..163faca
+--- /dev/null
++++ b/src/scorer.py
+@@ -0,0 +1,115 @@
++from . import db
++from .models import CreatorScore
++
++
++# Default values for Bayesian averaging
++_DEFAULT_MIN_VOTES = 10
++_DEFAULT_GLOBAL_AVG = 3.5
++
++
++def calculate_bayesian_score(
++    avg_rating: float,
++    rating_count: int,
++    global_avg: float = _DEFAULT_GLOBAL_AVG,
++    min_votes: int = _DEFAULT_MIN_VOTES
++) -> float:
++    """
++    Calculate Bayesian average rating.
++
++    This weighs the creator's actual rating against a global average,
++    giving more weight to the actual rating as the number of votes increases.
++
++    Args:
++        avg_rating: Creator's average rating
++        rating_count: Total number of ratings across all games
++        global_avg: Global average rating (default: 3.5)
++        min_votes: Minimum votes threshold for confidence (default: 10)
++
++    Returns:
++        Weighted Bayesian score
++    """
++    weighted_score = (
++        (rating_count / (rating_count + min_votes)) * avg_rating +
++        (min_votes / (rating_count + min_votes)) * global_avg
++    )
++    return round(weighted_score, 4)
++
++
++def score_creator(creator_id: int) -> CreatorScore:
++    """
++    Calculate score for a single creator.
++
++    Args:
++        creator_id: ID of the creator to score
++
++    Returns:
++        CreatorScore object with calculated metrics
++    """
++    with db.get_connection() as conn:
++        cursor = conn.cursor()
++
++        # Get aggregate stats for this creator's games
++        cursor.execute("""
++            SELECT
++                COUNT(*) as game_count,
++                SUM(rating_count) as total_ratings,
++                AVG(rating) as avg_rating
++            FROM games
++            WHERE creator_id = %s AND rating IS NOT NULL
++        """, (creator_id,))
++
++        row = cursor.fetchone()
++        cursor.close()
++
++        if not row or row[0] == 0:
++            # No games with ratings
++            return CreatorScore(
++                creator_id=creator_id,
++                game_count=0,
++                total_ratings=0,
++                avg_rating=0.0,
++                bayesian_score=0.0
++            )
++
++        game_count = row[0]
++        total_ratings = row[1] or 0
++        avg_rating = float(row[2]) if row[2] else 0.0
++
++        # Calculate Bayesian score
++        bayesian_score = calculate_bayesian_score(avg_rating, total_ratings)
++
++        return CreatorScore(
++            creator_id=creator_id,
++            game_count=game_count,
++            total_ratings=total_ratings,
++            avg_rating=round(avg_rating, 2),
++            bayesian_score=bayesian_score
++        )
++
++
++def score_all() -> dict[str, int]:
++    """
++    Recalculate scores for all creators.
++
++    Returns:
++        Dictionary with stats: {creators_scored}
++    """
++    stats = {
++        "creators_scored": 0,
++    }
++
++    with db.get_connection() as conn:
++        cursor = conn.cursor()
++
++        # Get all creator IDs
++        cursor.execute("SELECT id FROM creators")
++        creator_ids = [row[0] for row in cursor.fetchall()]
++        cursor.close()
++
++    # Score each creator
++    for creator_id in creator_ids:
++        score = score_creator(creator_id)
++        db.upsert_creator_score(score)
++        stats["creators_scored"] += 1
++
++    return stats
+diff --git a/tests/__init__.py b/tests/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/fixtures/feed_sample.xml b/tests/fixtures/feed_sample.xml
+new file mode 100644
+index 0000000..f1d14be
+--- /dev/null
++++ b/tests/fixtures/feed_sample.xml
+@@ -0,0 +1,29 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++    <title>itch.io - newest games</title>
++    <link>https://itch.io/games</link>
++    <description>itch.io newest games</description>
++
++    <item>
++      <title>Cool Adventure Game</title>
++      <link>https://testdev.itch.io/cool-adventure</link>
++      <description>An exciting adventure game</description>
++      <pubDate>Mon, 01 Jan 2024 12:00:00 GMT</pubDate>
++    </item>
++
++    <item>
++      <title>Puzzle Master</title>
++      <link>https://puzzleguru.itch.io/puzzle-master</link>
++      <description>A challenging puzzle game</description>
++      <pubDate>Tue, 02 Jan 2024 15:30:00 GMT</pubDate>
++    </item>
++
++    <item>
++      <title>Space Shooter</title>
++      <link>https://gamerdev.itch.io/space-shooter</link>
++      <description>Fast-paced space action</description>
++      <pubDate>Wed, 03 Jan 2024 09:15:00 GMT</pubDate>
++    </item>
++  </channel>
++</rss>
+diff --git a/tests/fixtures/game_no_ratings.html b/tests/fixtures/game_no_ratings.html
+new file mode 100644
+index 0000000..ba2371c
+--- /dev/null
++++ b/tests/fixtures/game_no_ratings.html
+@@ -0,0 +1,12 @@
++<!DOCTYPE html>
++<html>
++<head>
++    <title>New Game by testdev</title>
++</head>
++<body>
++    <div class="game_info_panel_widget">
++        <!-- No rating widget present -->
++        <div class="game_title">New Game</div>
++    </div>
++</body>
++</html>
+diff --git a/tests/fixtures/game_sample.html b/tests/fixtures/game_sample.html
+new file mode 100644
+index 0000000..f6033db
+--- /dev/null
++++ b/tests/fixtures/game_sample.html
+@@ -0,0 +1,18 @@
++<!DOCTYPE html>
++<html>
++<head>
++    <title>Cool Adventure Game by testdev</title>
++</head>
++<body>
++    <div class="game_info_panel_widget">
++        <div class="rating_widget">
++            <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++                <span itemprop="ratingValue">4.5</span>
++                <meta itemprop="bestRating" content="5">
++                <meta itemprop="worstRating" content="1">
++                <span itemprop="ratingCount">150</span> ratings
++            </div>
++        </div>
++    </div>
++</body>
++</html>
+diff --git a/tests/fixtures/profile_sample.html b/tests/fixtures/profile_sample.html
+new file mode 100644
+index 0000000..465c60f
+--- /dev/null
++++ b/tests/fixtures/profile_sample.html
+@@ -0,0 +1,37 @@
++<!DOCTYPE html>
++<html>
++<head>
++    <title>testdev - itch.io</title>
++</head>
++<body>
++    <div class="game_grid_widget">
++        <div class="game_cell" data-game_id="123">
++            <a href="https://testdev.itch.io/cool-adventure" class="title game_link">Cool Adventure Game</a>
++            <div class="game_text">
++                <div class="published_at">Published Jan 15, 2024</div>
++            </div>
++        </div>
++
++        <div class="game_cell" data-game_id="456">
++            <a href="https://testdev.itch.io/puzzle-master" class="title game_link">Puzzle Master</a>
++            <div class="game_text">
++                <div class="published_at">Published Feb 20, 2024</div>
++            </div>
++        </div>
++
++        <div class="game_cell" data-game_id="789">
++            <a href="https://testdev.itch.io/space-game" class="title game_link">Space Game</a>
++            <div class="game_text">
++                <div class="published_at">Published Mar 10, 2024</div>
++            </div>
++        </div>
++    </div>
++
++    <!-- Games without dates -->
++    <div class="game_grid_widget">
++        <div class="game_cell" data-game_id="999">
++            <a href="https://testdev.itch.io/old-game" class="title game_link">Old Game</a>
++        </div>
++    </div>
++</body>
++</html>
+diff --git a/tests/parsers/__init__.py b/tests/parsers/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/parsers/test_game.py b/tests/parsers/test_game.py
+new file mode 100644
+index 0000000..a1c76ef
+--- /dev/null
++++ b/tests/parsers/test_game.py
+@@ -0,0 +1,150 @@
++from pathlib import Path
++
++import pytest
++
++from src.parsers.game import parse_game
++
++
++@pytest.fixture
++def sample_game_html():
++    """Load sample game HTML with ratings."""
++    fixture_path = Path(__file__).parent.parent / "fixtures" / "game_sample.html"
++    return fixture_path.read_text()
++
++
++@pytest.fixture
++def sample_game_no_ratings_html():
++    """Load sample game HTML without ratings."""
++    fixture_path = Path(__file__).parent.parent / "fixtures" / "game_no_ratings.html"
++    return fixture_path.read_text()
++
++
++def test_parse_game_with_ratings(sample_game_html):
++    """Test parsing a game page with ratings."""
++    result = parse_game(sample_game_html)
++
++    assert result["rating"] == 4.5
++    assert result["rating_count"] == 150
++
++
++def test_parse_game_no_ratings(sample_game_no_ratings_html):
++    """Test parsing a game page without ratings."""
++    result = parse_game(sample_game_no_ratings_html)
++
++    assert result["rating"] is None
++    assert result["rating_count"] == 0
++
++
++def test_parse_game_empty_html():
++    """Test parsing empty HTML."""
++    html = "<html><body></body></html>"
++    result = parse_game(html)
++
++    assert result["rating"] is None
++    assert result["rating_count"] == 0
++
++
++def test_parse_game_different_rating():
++    """Test parsing games with different rating values."""
++    html_high_rating = """
++    <html>
++    <body>
++        <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++            <span itemprop="ratingValue">5.0</span>
++            <span itemprop="ratingCount">1000</span> ratings
++        </div>
++    </body>
++    </html>
++    """
++
++    result = parse_game(html_high_rating)
++    assert result["rating"] == 5.0
++    assert result["rating_count"] == 1000
++
++
++def test_parse_game_low_rating_count():
++    """Test parsing game with few ratings."""
++    html_few_ratings = """
++    <html>
++    <body>
++        <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++            <span itemprop="ratingValue">3.2</span>
++            <span itemprop="ratingCount">5</span> ratings
++        </div>
++    </body>
++    </html>
++    """
++
++    result = parse_game(html_few_ratings)
++    assert result["rating"] == 3.2
++    assert result["rating_count"] == 5
++
++
++def test_parse_game_single_rating():
++    """Test parsing game with a single rating."""
++    html_single = """
++    <html>
++    <body>
++        <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++            <span itemprop="ratingValue">4.0</span>
++            <span itemprop="ratingCount">1</span> rating
++        </div>
++    </body>
++    </html>
++    """
++
++    result = parse_game(html_single)
++    assert result["rating"] == 4.0
++    assert result["rating_count"] == 1
++
++
++def test_parse_game_malformed_rating_count():
++    """Test parsing game with malformed rating count."""
++    html_malformed = """
++    <html>
++    <body>
++        <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++            <span itemprop="ratingValue">4.5</span>
++            <span itemprop="ratingCount">invalid</span> ratings
++        </div>
++    </body>
++    </html>
++    """
++
++    result = parse_game(html_malformed)
++    assert result["rating"] == 4.5
++    assert result["rating_count"] == 0  # Should default to 0 on parse error
++
++
++def test_parse_game_missing_rating_value():
++    """Test parsing game with missing rating value."""
++    html_missing_value = """
++    <html>
++    <body>
++        <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++            <span itemprop="ratingCount">100</span> ratings
++        </div>
++    </body>
++    </html>
++    """
++
++    result = parse_game(html_missing_value)
++    assert result["rating"] is None
++    assert result["rating_count"] == 100
++
++
++def test_parse_game_missing_rating_count():
++    """Test parsing game with missing rating count."""
++    html_missing_count = """
++    <html>
++    <body>
++        <div class="aggregate_rating" itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
++            <span itemprop="ratingValue">4.5</span>
++        </div>
++    </body>
++    </html>
++    """
++
++    result = parse_game(html_missing_count)
++    assert result["rating"] == 4.5
++    assert result["rating_count"] == 0
+diff --git a/tests/parsers/test_profile.py b/tests/parsers/test_profile.py
+new file mode 100644
+index 0000000..5ea440f
+--- /dev/null
++++ b/tests/parsers/test_profile.py
+@@ -0,0 +1,127 @@
++from datetime import datetime
++from pathlib import Path
++
++import pytest
++
++from src.parsers.profile import _parse_date_text, parse_profile
++
++
++@pytest.fixture
++def sample_profile_html():
++    """Load sample profile HTML fixture."""
++    fixture_path = Path(__file__).parent.parent / "fixtures" / "profile_sample.html"
++    return fixture_path.read_text()
++
++
++def test_parse_profile(sample_profile_html):
++    """Test parsing a creator profile page."""
++    result = parse_profile(sample_profile_html)
++
++    assert len(result) == 4
++
++    # Check first game
++    assert result[0]["title"] == "Cool Adventure Game"
++    assert result[0]["url"] == "https://testdev.itch.io/cool-adventure"
++    assert result[0]["publish_date"] == datetime(2024, 1, 15)
++
++    # Check second game
++    assert result[1]["title"] == "Puzzle Master"
++    assert result[1]["url"] == "https://testdev.itch.io/puzzle-master"
++    assert result[1]["publish_date"] == datetime(2024, 2, 20)
++
++    # Check third game
++    assert result[2]["title"] == "Space Game"
++    assert result[2]["url"] == "https://testdev.itch.io/space-game"
++    assert result[2]["publish_date"] == datetime(2024, 3, 10)
++
++    # Check game without date
++    assert result[3]["title"] == "Old Game"
++    assert result[3]["url"] == "https://testdev.itch.io/old-game"
++    assert result[3]["publish_date"] is None
++
++
++def test_parse_profile_empty():
++    """Test parsing an empty profile."""
++    html = "<html><body></body></html>"
++    result = parse_profile(html)
++    assert len(result) == 0
++
++
++def test_parse_profile_no_dates():
++    """Test parsing profile with games but no dates."""
++    html = """
++    <html>
++    <body>
++        <div class="game_cell">
++            <a href="https://testdev.itch.io/game1" class="game_link">Game 1</a>
++        </div>
++        <div class="game_cell">
++            <a href="https://testdev.itch.io/game2" class="game_link">Game 2</a>
++        </div>
++    </body>
++    </html>
++    """
++    result = parse_profile(html)
++
++    assert len(result) == 2
++    assert result[0]["title"] == "Game 1"
++    assert result[0]["publish_date"] is None
++    assert result[1]["title"] == "Game 2"
++    assert result[1]["publish_date"] is None
++
++
++def test_parse_profile_malformed():
++    """Test parsing malformed HTML."""
++    html = """
++    <html>
++    <body>
++        <div class="game_cell">
++            <!-- Missing game_link class -->
++            <a href="https://testdev.itch.io/game1">Game 1</a>
++        </div>
++        <div class="game_cell">
++            <a href="https://testdev.itch.io/game2" class="game_link">Game 2</a>
++        </div>
++    </body>
++    </html>
++    """
++    result = parse_profile(html)
++
++    # Should only find the one with correct class
++    assert len(result) == 1
++    assert result[0]["title"] == "Game 2"
++
++
++def test_parse_date_text():
++    """Test date text parsing."""
++    # Standard format with "Published"
++    assert _parse_date_text("Published Jan 15, 2024") == datetime(2024, 1, 15)
++
++    # Without "Published"
++    assert _parse_date_text("Jan 15, 2024") == datetime(2024, 1, 15)
++
++    # Full month name
++    assert _parse_date_text("January 15, 2024") == datetime(2024, 1, 15)
++
++    # Different months
++    assert _parse_date_text("Dec 31, 2023") == datetime(2023, 12, 31)
++    assert _parse_date_text("March 5, 2024") == datetime(2024, 3, 5)
++
++
++def test_parse_date_text_invalid():
++    """Test parsing invalid date text."""
++    # Invalid format
++    assert _parse_date_text("Invalid date") is None
++    assert _parse_date_text("2024-01-15") is None
++    assert _parse_date_text("") is None
++
++
++def test_parse_profile_extracts_all_grids(sample_profile_html):
++    """Test that games from multiple game grids are extracted."""
++    result = parse_profile(sample_profile_html)
++
++    # Should find games from both game_grid_widget divs
++    assert len(result) == 4
++    titles = [game["title"] for game in result]
++    assert "Cool Adventure Game" in titles
++    assert "Old Game" in titles
+diff --git a/tests/test_backfiller.py b/tests/test_backfiller.py
+new file mode 100644
+index 0000000..9f51249
+--- /dev/null
++++ b/tests/test_backfiller.py
+@@ -0,0 +1,159 @@
++from datetime import datetime
++from pathlib import Path
++from unittest.mock import MagicMock, patch
++
++import pytest
++
++from src.backfiller import _extract_game_id, backfill_all, backfill_creator
++from src.models import Creator
++
++
++@pytest.fixture
++def sample_creator():
++    """Create a sample creator for testing."""
++    return Creator(
++        id=1,
++        name="testdev",
++        profile_url="https://testdev.itch.io",
++        backfilled=False,
++        first_seen=datetime(2024, 1, 1)
++    )
++
++
++@pytest.fixture
++def sample_profile_html():
++    """Load sample profile HTML."""
++    fixture_path = Path(__file__).parent / "fixtures" / "profile_sample.html"
++    return fixture_path.read_text()
++
++
++def test_backfill_creator(sample_creator, sample_profile_html):
++    """Test backfilling a single creator."""
++    with patch("src.backfiller.fetch") as mock_fetch, \
++         patch("src.backfiller.db.insert_game") as mock_insert_game, \
++         patch("src.backfiller.db.mark_creator_backfilled") as mock_mark_backfilled:
++
++        mock_fetch.return_value = sample_profile_html
++        mock_insert_game.return_value = 1  # Return a valid ID
++
++        result = backfill_creator(sample_creator)
++
++        # Should have fetched the profile
++        mock_fetch.assert_called_once_with("https://testdev.itch.io")
++
++        # Should have inserted 4 games (from fixture)
++        assert mock_insert_game.call_count == 4
++        assert result == 4
++
++        # Should have marked creator as backfilled
++        mock_mark_backfilled.assert_called_once_with(1)
++
++
++def test_backfill_creator_empty_profile(sample_creator):
++    """Test backfilling a creator with no games."""
++    with patch("src.backfiller.fetch") as mock_fetch, \
++         patch("src.backfiller.db.insert_game") as mock_insert_game, \
++         patch("src.backfiller.db.mark_creator_backfilled") as mock_mark_backfilled:
++
++        mock_fetch.return_value = "<html><body></body></html>"
++
++        result = backfill_creator(sample_creator)
++
++        # No games inserted
++        assert result == 0
++        mock_insert_game.assert_not_called()
++
++        # Still marked as backfilled
++        mock_mark_backfilled.assert_called_once_with(1)
++
++
++def test_backfill_all():
++    """Test backfilling all unbackfilled creators."""
++    creator1 = Creator(1, "dev1", "https://dev1.itch.io", False, datetime(2024, 1, 1))
++    creator2 = Creator(2, "dev2", "https://dev2.itch.io", False, datetime(2024, 1, 2))
++
++    with patch("src.backfiller.db.get_unbackfilled_creators") as mock_get_creators, \
++         patch("src.backfiller.backfill_creator") as mock_backfill_creator:
++
++        mock_get_creators.return_value = [creator1, creator2]
++        mock_backfill_creator.side_effect = [5, 3]  # Return game counts
++
++        result = backfill_all()
++
++        assert result["creators_processed"] == 2
++        assert result["games_inserted"] == 8  # 5 + 3
++        assert result["errors"] == 0
++
++        # Should have called backfill_creator twice
++        assert mock_backfill_creator.call_count == 2
++
++
++def test_backfill_all_with_errors():
++    """Test backfilling with some errors."""
++    creator1 = Creator(1, "dev1", "https://dev1.itch.io", False, datetime(2024, 1, 1))
++    creator2 = Creator(2, "dev2", "https://dev2.itch.io", False, datetime(2024, 1, 2))
++    creator3 = Creator(3, "dev3", "https://dev3.itch.io", False, datetime(2024, 1, 3))
++
++    with patch("src.backfiller.db.get_unbackfilled_creators") as mock_get_creators, \
++         patch("src.backfiller.backfill_creator") as mock_backfill_creator:
++
++        mock_get_creators.return_value = [creator1, creator2, creator3]
++        # First succeeds, second fails, third succeeds
++        mock_backfill_creator.side_effect = [5, Exception("Network error"), 3]
++
++        result = backfill_all()
++
++        assert result["creators_processed"] == 2  # Only successful ones
++        assert result["games_inserted"] == 8  # 5 + 3
++        assert result["errors"] == 1
++
++
++def test_backfill_all_no_creators():
++    """Test backfilling when there are no unbackfilled creators."""
++    with patch("src.backfiller.db.get_unbackfilled_creators") as mock_get_creators:
++        mock_get_creators.return_value = []
++
++        result = backfill_all()
++
++        assert result["creators_processed"] == 0
++        assert result["games_inserted"] == 0
++        assert result["errors"] == 0
++
++
++def test_extract_game_id():
++    """Test extracting game ID from URLs."""
++    # Standard URL
++    assert _extract_game_id("https://testdev.itch.io/cool-game") == "cool-game"
++
++    # With query parameters
++    assert _extract_game_id("https://testdev.itch.io/cool-game?secret=xyz") == "cool-game"
++
++    # Different game
++    assert _extract_game_id("https://testdev.itch.io/puzzle-master") == "puzzle-master"
++
++    # With trailing slash
++    assert _extract_game_id("https://testdev.itch.io/space-game/") == ""
++
++
++def test_backfill_creator_inserts_correct_game_data(sample_creator, sample_profile_html):
++    """Test that game data is correctly formatted for insertion."""
++    with patch("src.backfiller.fetch") as mock_fetch, \
++         patch("src.backfiller.db.insert_game") as mock_insert_game, \
++         patch("src.backfiller.db.mark_creator_backfilled"):
++
++        mock_fetch.return_value = sample_profile_html
++        mock_insert_game.return_value = 1
++
++        backfill_creator(sample_creator)
++
++        # Check the first game inserted
++        first_call = mock_insert_game.call_args_list[0]
++        game = first_call[0][0]
++
++        assert game.creator_name == "testdev"
++        assert game.title == "Cool Adventure Game"
++        assert game.itch_id == "cool-adventure"
++        assert game.url == "https://testdev.itch.io/cool-adventure"
++        assert game.rating is None
++        assert game.rating_count == 0
++        assert game.scraped_at is None
+diff --git a/tests/test_db.py b/tests/test_db.py
+new file mode 100644
+index 0000000..02ff62f
+--- /dev/null
++++ b/tests/test_db.py
+@@ -0,0 +1,254 @@
++import os
++from datetime import datetime, date
++from unittest.mock import MagicMock, patch
++
++import pytest
++
++from src.db import (
++    create_tables,
++    get_creator_by_name,
++    get_unbackfilled_creators,
++    get_unenriched_games,
++    insert_creator,
++    insert_game,
++    mark_creator_backfilled,
++    update_game_ratings,
++    upsert_creator_score,
++)
++from src.models import Creator, CreatorScore, Game
++
++
++@pytest.fixture
++def mock_env(monkeypatch):
++    """Set up mock environment variables."""
++    monkeypatch.setenv("POSTGRES_DATABASE", "test_db")
++    monkeypatch.setenv("POSTGRES_USER", "test_user")
++    monkeypatch.setenv("POSTGRES_PASSWORD", "test_pass")
++    monkeypatch.setenv("POSTGRES_HOST", "localhost")
++
++
++def test_create_tables(mock_env):
++    """Test that create_tables executes SQL without errors."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        create_tables()
++
++        # Verify connection was established
++        mock_connect.assert_called_once()
++        # Verify SQL was executed
++        assert mock_cursor.execute.call_count == 5  # 3 tables + 2 indexes
++        mock_conn.commit.assert_called_once()
++        mock_conn.close.assert_called_once()
++
++
++def test_insert_creator(mock_env):
++    """Test inserting a new creator."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++        mock_cursor.fetchone.return_value = (123,)
++
++        creator = Creator(
++            id=None,
++            name="testdev",
++            profile_url="https://testdev.itch.io",
++            backfilled=False,
++            first_seen=datetime.now()
++        )
++
++        result = insert_creator(creator)
++
++        assert result == 123
++        mock_cursor.execute.assert_called_once()
++        mock_conn.commit.assert_called_once()
++
++
++def test_insert_game(mock_env):
++    """Test inserting a new game."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # First call returns creator_id, second returns game id
++        mock_cursor.fetchone.side_effect = [(1,), (456,)]
++
++        game = Game(
++            id=None,
++            itch_id="test-game-123",
++            title="Test Game",
++            creator_name="testdev",
++            url="https://testdev.itch.io/test-game",
++            publish_date=date(2024, 1, 1),
++            rating=None,
++            rating_count=0,
++            scraped_at=None
++        )
++
++        result = insert_game(game)
++
++        assert result == 456
++        assert mock_cursor.execute.call_count == 2  # creator lookup + insert
++        mock_conn.commit.assert_called_once()
++
++
++def test_get_creator_by_name(mock_env):
++    """Test fetching a creator by name."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        mock_cursor.fetchone.return_value = {
++            "id": 1,
++            "name": "testdev",
++            "profile_url": "https://testdev.itch.io",
++            "backfilled": False,
++            "first_seen": datetime(2024, 1, 1)
++        }
++
++        result = get_creator_by_name("testdev")
++
++        assert result is not None
++        assert result.name == "testdev"
++        assert result.id == 1
++        assert result.backfilled is False
++
++
++def test_get_creator_by_name_not_found(mock_env):
++    """Test fetching a non-existent creator."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++        mock_cursor.fetchone.return_value = None
++
++        result = get_creator_by_name("nonexistent")
++
++        assert result is None
++
++
++def test_get_unbackfilled_creators(mock_env):
++    """Test fetching unbackfilled creators."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        mock_cursor.fetchall.return_value = [
++            {
++                "id": 1,
++                "name": "dev1",
++                "profile_url": "https://dev1.itch.io",
++                "backfilled": False,
++                "first_seen": datetime(2024, 1, 1)
++            },
++            {
++                "id": 2,
++                "name": "dev2",
++                "profile_url": "https://dev2.itch.io",
++                "backfilled": False,
++                "first_seen": datetime(2024, 1, 2)
++            }
++        ]
++
++        result = get_unbackfilled_creators()
++
++        assert len(result) == 2
++        assert result[0].name == "dev1"
++        assert result[1].name == "dev2"
++
++
++def test_get_unenriched_games(mock_env):
++    """Test fetching games without ratings."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        mock_cursor.fetchall.return_value = [
++            {
++                "id": 1,
++                "itch_id": "game-1",
++                "title": "Game 1",
++                "creator_name": "dev1",
++                "url": "https://dev1.itch.io/game-1",
++                "publish_date": date(2024, 1, 1),
++                "rating": None,
++                "rating_count": 0,
++                "scraped_at": None
++            }
++        ]
++
++        result = get_unenriched_games()
++
++        assert len(result) == 1
++        assert result[0].title == "Game 1"
++        assert result[0].scraped_at is None
++
++
++def test_update_game_ratings(mock_env):
++    """Test updating game ratings."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        update_game_ratings(1, 4.5, 100)
++
++        mock_cursor.execute.assert_called_once()
++        args = mock_cursor.execute.call_args[0]
++        assert args[1][0] == 4.5  # rating
++        assert args[1][1] == 100  # rating_count
++        assert args[1][3] == 1  # game_id
++
++
++def test_mark_creator_backfilled(mock_env):
++    """Test marking a creator as backfilled."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        mark_creator_backfilled(1)
++
++        mock_cursor.execute.assert_called_once()
++        assert "backfilled = TRUE" in mock_cursor.execute.call_args[0][0]
++
++
++def test_upsert_creator_score(mock_env):
++    """Test upserting a creator score."""
++    with patch("src.db.psycopg2.connect") as mock_connect:
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_connect.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        score = CreatorScore(
++            creator_id=1,
++            game_count=10,
++            total_ratings=500,
++            avg_rating=4.2,
++            bayesian_score=4.15
++        )
++
++        upsert_creator_score(score)
++
++        mock_cursor.execute.assert_called_once()
++        args = mock_cursor.execute.call_args[0]
++        assert args[1][0] == 1  # creator_id
++        assert args[1][1] == 10  # game_count
++        assert args[1][2] == 500  # total_ratings
+diff --git a/tests/test_enricher.py b/tests/test_enricher.py
+new file mode 100644
+index 0000000..840dd3d
+--- /dev/null
++++ b/tests/test_enricher.py
+@@ -0,0 +1,156 @@
++from datetime import datetime, date
++from pathlib import Path
++from unittest.mock import patch
++
++import pytest
++
++from src.enricher import enrich_all, enrich_game
++from src.models import Game
++
++
++@pytest.fixture
++def sample_game():
++    """Create a sample game for testing."""
++    return Game(
++        id=1,
++        itch_id="cool-adventure",
++        title="Cool Adventure Game",
++        creator_name="testdev",
++        url="https://testdev.itch.io/cool-adventure",
++        publish_date=date(2024, 1, 15),
++        rating=None,
++        rating_count=0,
++        scraped_at=None
++    )
++
++
++@pytest.fixture
++def sample_game_html():
++    """Load sample game HTML with ratings."""
++    fixture_path = Path(__file__).parent / "fixtures" / "game_sample.html"
++    return fixture_path.read_text()
++
++
++@pytest.fixture
++def sample_game_no_ratings_html():
++    """Load sample game HTML without ratings."""
++    fixture_path = Path(__file__).parent / "fixtures" / "game_no_ratings.html"
++    return fixture_path.read_text()
++
++
++def test_enrich_game(sample_game, sample_game_html):
++    """Test enriching a single game."""
++    with patch("src.enricher.fetch") as mock_fetch, \
++         patch("src.enricher.db.update_game_ratings") as mock_update:
++
++        mock_fetch.return_value = sample_game_html
++
++        result = enrich_game(sample_game)
++
++        assert result is True
++
++        # Should have fetched the game page
++        mock_fetch.assert_called_once_with("https://testdev.itch.io/cool-adventure")
++
++        # Should have updated ratings
++        mock_update.assert_called_once_with(
++            game_id=1,
++            rating=4.5,
++            rating_count=150
++        )
++
++
++def test_enrich_game_no_ratings(sample_game, sample_game_no_ratings_html):
++    """Test enriching a game without ratings."""
++    with patch("src.enricher.fetch") as mock_fetch, \
++         patch("src.enricher.db.update_game_ratings") as mock_update:
++
++        mock_fetch.return_value = sample_game_no_ratings_html
++
++        result = enrich_game(sample_game)
++
++        assert result is True
++
++        # Should have updated with None rating
++        mock_update.assert_called_once_with(
++            game_id=1,
++            rating=None,
++            rating_count=0
++        )
++
++
++def test_enrich_all():
++    """Test enriching all unenriched games."""
++    game1 = Game(1, "game1", "Game 1", "dev1", "https://dev1.itch.io/game1",
++                 date(2024, 1, 1), None, 0, None)
++    game2 = Game(2, "game2", "Game 2", "dev2", "https://dev2.itch.io/game2",
++                 date(2024, 1, 2), None, 0, None)
++
++    with patch("src.enricher.db.get_unenriched_games") as mock_get_games, \
++         patch("src.enricher.enrich_game") as mock_enrich_game:
++
++        mock_get_games.return_value = [game1, game2]
++        mock_enrich_game.return_value = True
++
++        result = enrich_all()
++
++        assert result["games_processed"] == 2
++        assert result["errors"] == 0
++
++        # Should have enriched both games
++        assert mock_enrich_game.call_count == 2
++
++
++def test_enrich_all_with_errors():
++    """Test enriching with some errors."""
++    game1 = Game(1, "game1", "Game 1", "dev1", "https://dev1.itch.io/game1",
++                 date(2024, 1, 1), None, 0, None)
++    game2 = Game(2, "game2", "Game 2", "dev2", "https://dev2.itch.io/game2",
++                 date(2024, 1, 2), None, 0, None)
++    game3 = Game(3, "game3", "Game 3", "dev3", "https://dev3.itch.io/game3",
++                 date(2024, 1, 3), None, 0, None)
++
++    with patch("src.enricher.db.get_unenriched_games") as mock_get_games, \
++         patch("src.enricher.enrich_game") as mock_enrich_game:
++
++        mock_get_games.return_value = [game1, game2, game3]
++        # First succeeds, second fails, third succeeds
++        mock_enrich_game.side_effect = [True, Exception("Network error"), True]
++
++        result = enrich_all()
++
++        assert result["games_processed"] == 2  # Only successful ones
++        assert result["errors"] == 1
++
++
++def test_enrich_all_no_games():
++    """Test enriching when there are no unenriched games."""
++    with patch("src.enricher.db.get_unenriched_games") as mock_get_games:
++        mock_get_games.return_value = []
++
++        result = enrich_all()
++
++        assert result["games_processed"] == 0
++        assert result["errors"] == 0
++
++
++def test_enrich_game_fetch_failure(sample_game):
++    """Test handling fetch failures."""
++    with patch("src.enricher.fetch") as mock_fetch:
++        mock_fetch.side_effect = Exception("Network error")
++
++        with pytest.raises(Exception):
++            enrich_game(sample_game)
++
++
++def test_enrich_game_calls_http_client(sample_game, sample_game_html):
++    """Test that enrich_game uses the HTTP client."""
++    with patch("src.enricher.fetch") as mock_fetch, \
++         patch("src.enricher.db.update_game_ratings"):
++
++        mock_fetch.return_value = sample_game_html
++
++        enrich_game(sample_game)
++
++        # Verify fetch was called with the game URL
++        mock_fetch.assert_called_once_with(sample_game.url)
+diff --git a/tests/test_feed_poller.py b/tests/test_feed_poller.py
+new file mode 100644
+index 0000000..561e4c3
+--- /dev/null
++++ b/tests/test_feed_poller.py
+@@ -0,0 +1,134 @@
++from datetime import datetime
++from pathlib import Path
++from unittest.mock import patch
++
++import pytest
++
++from src.feed_poller import _extract_creator_from_url, get_new_releases, poll_feed
++
++
++@pytest.fixture
++def sample_feed_xml():
++    """Load sample RSS feed fixture."""
++    fixture_path = Path(__file__).parent / "fixtures" / "feed_sample.xml"
++    return fixture_path.read_text()
++
++
++def test_poll_feed(sample_feed_xml):
++    """Test parsing an RSS feed."""
++    with patch("src.feed_poller.fetch") as mock_fetch:
++        mock_fetch.return_value = sample_feed_xml
++
++        result = poll_feed("https://itch.io/games.xml")
++
++        assert len(result) == 3
++
++        # Check first entry
++        assert result[0]["title"] == "Cool Adventure Game"
++        assert result[0]["creator"] == "testdev"
++        assert result[0]["game_url"] == "https://testdev.itch.io/cool-adventure"
++        assert result[0]["publish_date"] is not None
++        assert isinstance(result[0]["publish_date"], datetime)
++
++        # Check second entry
++        assert result[1]["title"] == "Puzzle Master"
++        assert result[1]["creator"] == "puzzleguru"
++
++        # Check third entry
++        assert result[2]["title"] == "Space Shooter"
++        assert result[2]["creator"] == "gamerdev"
++
++
++def test_poll_feed_empty():
++    """Test polling an empty feed."""
++    empty_feed = """<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++    <title>itch.io - newest games</title>
++    <link>https://itch.io/games</link>
++  </channel>
++</rss>"""
++
++    with patch("src.feed_poller.fetch") as mock_fetch:
++        mock_fetch.return_value = empty_feed
++
++        result = poll_feed("https://itch.io/games.xml")
++
++        assert len(result) == 0
++
++
++def test_get_new_releases(sample_feed_xml):
++    """Test getting new releases from multiple feeds."""
++    with patch("src.feed_poller.fetch") as mock_fetch:
++        # Return same feed for both URLs
++        mock_fetch.return_value = sample_feed_xml
++
++        result = get_new_releases()
++
++        # Should have 3 entries (deduplicated)
++        assert len(result) == 3
++
++        # Check that fetch was called twice (for both default feeds)
++        assert mock_fetch.call_count == 2
++
++
++def test_get_new_releases_deduplication(sample_feed_xml):
++    """Test that duplicate entries are removed."""
++    with patch("src.feed_poller.fetch") as mock_fetch:
++        # Return same feed for both URLs to test deduplication
++        mock_fetch.return_value = sample_feed_xml
++
++        result = get_new_releases()
++
++        # Should deduplicate entries with same URL
++        urls = [entry["game_url"] for entry in result]
++        assert len(urls) == len(set(urls))  # No duplicates
++
++
++def test_extract_creator_from_url():
++    """Test extracting creator name from various URL formats."""
++    # Standard format
++    assert _extract_creator_from_url("https://testdev.itch.io/cool-game") == "testdev"
++    assert _extract_creator_from_url("https://puzzleguru.itch.io/puzzle-master") == "puzzleguru"
++
++    # Without protocol
++    assert _extract_creator_from_url("testdev.itch.io/cool-game") == "testdev"
++
++    # With www (edge case)
++    assert _extract_creator_from_url("https://creator123.itch.io/game") == "creator123"
++
++
++def test_poll_feed_no_publish_date():
++    """Test parsing feed entries without publish dates."""
++    feed_no_dates = """<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++    <title>itch.io - games</title>
++    <link>https://itch.io/games</link>
++    <item>
++      <title>No Date Game</title>
++      <link>https://testdev.itch.io/no-date-game</link>
++      <description>A game without a publish date</description>
++    </item>
++  </channel>
++</rss>"""
++
++    with patch("src.feed_poller.fetch") as mock_fetch:
++        mock_fetch.return_value = feed_no_dates
++
++        result = poll_feed("https://itch.io/games.xml")
++
++        assert len(result) == 1
++        assert result[0]["title"] == "No Date Game"
++        assert result[0]["publish_date"] is None
++
++
++def test_poll_feed_calls_http_client():
++    """Test that poll_feed uses the HTTP client."""
++    with patch("src.feed_poller.fetch") as mock_fetch:
++        mock_fetch.return_value = """<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0"><channel></channel></rss>"""
++
++        poll_feed("https://test.com/feed.xml")
++
++        mock_fetch.assert_called_once_with("https://test.com/feed.xml")
+diff --git a/tests/test_http_client.py b/tests/test_http_client.py
+new file mode 100644
+index 0000000..52736d4
+--- /dev/null
++++ b/tests/test_http_client.py
+@@ -0,0 +1,172 @@
++import time
++from unittest.mock import MagicMock, patch
++
++import httpx
++import pytest
++
++from src.http_client import fetch
++
++
++@pytest.fixture(autouse=True)
++def reset_rate_limit():
++    """Reset rate limiting state before each test."""
++    import src.http_client
++    src.http_client._last_request_time = None
++    yield
++
++
++def test_fetch_success():
++    """Test successful fetch."""
++    with patch("src.http_client.httpx.get") as mock_get:
++        mock_response = MagicMock()
++        mock_response.status_code = 200
++        mock_response.text = "<html>test</html>"
++        mock_get.return_value = mock_response
++
++        result = fetch("https://example.com")
++
++        assert result == "<html>test</html>"
++        mock_get.assert_called_once()
++        assert mock_get.call_args[1]["headers"]["User-Agent"].startswith("itch-creators-scraper")
++
++
++def test_fetch_rate_limiting():
++    """Test that rate limiting enforces minimum delay."""
++    with patch("src.http_client.httpx.get") as mock_get:
++        mock_response = MagicMock()
++        mock_response.status_code = 200
++        mock_response.text = "<html>test</html>"
++        mock_get.return_value = mock_response
++
++        start = time.time()
++
++        # First request
++        fetch("https://example.com/1")
++
++        # Second request should be delayed
++        fetch("https://example.com/2")
++
++        elapsed = time.time() - start
++
++        # Should have waited at least 2 seconds between requests
++        assert elapsed >= 2.0
++        assert mock_get.call_count == 2
++
++
++def test_fetch_429_retry():
++    """Test retry logic on rate limiting (429)."""
++    with patch("src.http_client.httpx.get") as mock_get, \
++         patch("src.http_client.time.sleep") as mock_sleep:
++
++        # First attempt returns 429, second succeeds
++        mock_response_429 = MagicMock()
++        mock_response_429.status_code = 429
++
++        mock_response_200 = MagicMock()
++        mock_response_200.status_code = 200
++        mock_response_200.text = "<html>success</html>"
++
++        mock_get.side_effect = [mock_response_429, mock_response_200]
++
++        result = fetch("https://example.com")
++
++        assert result == "<html>success</html>"
++        assert mock_get.call_count == 2
++        # Should have slept for exponential backoff
++        mock_sleep.assert_called()
++
++
++def test_fetch_500_retry():
++    """Test retry logic on server error (500)."""
++    with patch("src.http_client.httpx.get") as mock_get, \
++         patch("src.http_client.time.sleep") as mock_sleep:
++
++        # First attempt returns 500, second succeeds
++        mock_response_500 = MagicMock()
++        mock_response_500.status_code = 500
++
++        mock_response_200 = MagicMock()
++        mock_response_200.status_code = 200
++        mock_response_200.text = "<html>success</html>"
++
++        mock_get.side_effect = [mock_response_500, mock_response_200]
++
++        result = fetch("https://example.com")
++
++        assert result == "<html>success</html>"
++        assert mock_get.call_count == 2
++        mock_sleep.assert_called()
++
++
++def test_fetch_max_retries_exceeded():
++    """Test that fetch fails after max retries."""
++    with patch("src.http_client.httpx.get") as mock_get, \
++         patch("src.http_client.time.sleep"):
++
++        # All attempts return 429
++        mock_response = MagicMock()
++        mock_response.status_code = 429
++        mock_get.return_value = mock_response
++
++        with pytest.raises(httpx.HTTPError):
++            fetch("https://example.com", max_retries=3)
++
++        # Should have tried 3 times
++        assert mock_get.call_count == 3
++
++
++def test_fetch_timeout_retry():
++    """Test retry on timeout."""
++    with patch("src.http_client.httpx.get") as mock_get, \
++         patch("src.http_client.time.sleep"):
++
++        # First attempt times out, second succeeds
++        mock_response = MagicMock()
++        mock_response.status_code = 200
++        mock_response.text = "<html>success</html>"
++
++        mock_get.side_effect = [httpx.TimeoutException("Timeout"), mock_response]
++
++        result = fetch("https://example.com")
++
++        assert result == "<html>success</html>"
++        assert mock_get.call_count == 2
++
++
++def test_fetch_non_retryable_error():
++    """Test that non-retryable errors (404, etc.) don't retry."""
++    with patch("src.http_client.httpx.get") as mock_get:
++
++        mock_response = MagicMock()
++        mock_response.status_code = 404
++        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
++            "Not found", request=MagicMock(), response=mock_response
++        )
++        mock_get.return_value = mock_response
++
++        with pytest.raises(httpx.HTTPStatusError):
++            fetch("https://example.com")
++
++        # Should only try once (no retry)
++        assert mock_get.call_count == 1
++
++
++def test_exponential_backoff():
++    """Test that exponential backoff increases correctly."""
++    with patch("src.http_client.httpx.get") as mock_get, \
++         patch("src.http_client.time.sleep") as mock_sleep:
++
++        # All attempts return 429
++        mock_response = MagicMock()
++        mock_response.status_code = 429
++        mock_get.return_value = mock_response
++
++        with pytest.raises(httpx.HTTPError):
++            fetch("https://example.com", max_retries=3)
++
++        # Check that sleep was called with increasing durations
++        sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
++        assert len(sleep_calls) >= 2
++        # First backoff should be 2s, second 4s, third 8s
++        assert sleep_calls[0] == 2  # 2^0 * 2
++        assert sleep_calls[1] == 4  # 2^1 * 2
+diff --git a/tests/test_scorer.py b/tests/test_scorer.py
+new file mode 100644
+index 0000000..bbf923b
+--- /dev/null
++++ b/tests/test_scorer.py
+@@ -0,0 +1,208 @@
++from unittest.mock import MagicMock, patch
++
++import pytest
++
++from src.scorer import calculate_bayesian_score, score_all, score_creator
++
++
++def test_calculate_bayesian_score():
++    """Test Bayesian score calculation."""
++    # High rating with many votes - should be close to actual rating
++    score = calculate_bayesian_score(avg_rating=4.5, rating_count=100)
++    assert score > 4.4  # Should be close to 4.5
++
++    # Low rating with many votes - should be close to actual rating
++    score = calculate_bayesian_score(avg_rating=2.0, rating_count=100)
++    assert score < 2.2  # Should be close to 2.0
++
++    # High rating with few votes - should be pulled toward global average
++    score = calculate_bayesian_score(avg_rating=5.0, rating_count=2)
++    assert 3.5 < score < 5.0  # Between global avg (3.5) and actual (5.0)
++
++    # No votes - should equal global average
++    score = calculate_bayesian_score(avg_rating=4.0, rating_count=0)
++    assert score == 3.5  # Should equal global avg
++
++
++def test_calculate_bayesian_score_custom_params():
++    """Test Bayesian score with custom parameters."""
++    # Custom global average
++    score = calculate_bayesian_score(
++        avg_rating=4.0,
++        rating_count=0,
++        global_avg=4.5,
++        min_votes=10
++    )
++    assert score == 4.5  # Should equal custom global avg
++
++    # Custom min votes threshold
++    score = calculate_bayesian_score(
++        avg_rating=5.0,
++        rating_count=5,
++        global_avg=3.5,
++        min_votes=5
++    )
++    # With min_votes=5 and rating_count=5, weights should be 50/50
++    expected = (0.5 * 5.0) + (0.5 * 3.5)
++    assert abs(score - expected) < 0.01
++
++
++def test_score_creator():
++    """Test scoring a single creator."""
++    with patch("src.scorer.db.get_connection") as mock_get_conn, \
++         patch("src.scorer.db") as mock_db:
++
++        # Mock connection and cursor
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_get_conn.return_value.__enter__.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # Mock query result: 10 games, 500 total ratings, 4.2 avg rating
++        mock_cursor.fetchone.return_value = (10, 500, 4.2)
++
++        result = score_creator(creator_id=1)
++
++        assert result.creator_id == 1
++        assert result.game_count == 10
++        assert result.total_ratings == 500
++        assert result.avg_rating == 4.2
++        assert result.bayesian_score > 0
++
++        # With 500 ratings, Bayesian score should be very close to avg_rating
++        assert abs(result.bayesian_score - 4.2) < 0.1
++
++
++def test_score_creator_no_games():
++    """Test scoring a creator with no rated games."""
++    with patch("src.scorer.db.get_connection") as mock_get_conn:
++
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_get_conn.return_value.__enter__.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # No games
++        mock_cursor.fetchone.return_value = (0, None, None)
++
++        result = score_creator(creator_id=1)
++
++        assert result.creator_id == 1
++        assert result.game_count == 0
++        assert result.total_ratings == 0
++        assert result.avg_rating == 0.0
++        assert result.bayesian_score == 0.0
++
++
++def test_score_creator_few_ratings():
++    """Test scoring a creator with few ratings."""
++    with patch("src.scorer.db.get_connection") as mock_get_conn:
++
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_get_conn.return_value.__enter__.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # 2 games, 5 total ratings, 5.0 avg rating
++        mock_cursor.fetchone.return_value = (2, 5, 5.0)
++
++        result = score_creator(creator_id=1)
++
++        assert result.creator_id == 1
++        assert result.game_count == 2
++        assert result.total_ratings == 5
++        assert result.avg_rating == 5.0
++
++        # With few ratings, score should be between avg and global avg
++        assert 3.5 < result.bayesian_score < 5.0
++
++
++def test_score_all():
++    """Test scoring all creators."""
++    with patch("src.scorer.db.get_connection") as mock_get_conn, \
++         patch("src.scorer.score_creator") as mock_score_creator, \
++         patch("src.scorer.db.upsert_creator_score") as mock_upsert:
++
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_get_conn.return_value.__enter__.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # Mock 3 creators
++        mock_cursor.fetchall.return_value = [(1,), (2,), (3,)]
++
++        # Mock score_creator to return dummy scores
++        from src.models import CreatorScore
++        mock_score_creator.side_effect = [
++            CreatorScore(1, 10, 100, 4.0, 3.95),
++            CreatorScore(2, 5, 50, 4.5, 4.25),
++            CreatorScore(3, 15, 200, 3.8, 3.78),
++        ]
++
++        result = score_all()
++
++        assert result["creators_scored"] == 3
++
++        # Should have called score_creator 3 times
++        assert mock_score_creator.call_count == 3
++
++        # Should have called upsert 3 times
++        assert mock_upsert.call_count == 3
++
++
++def test_score_all_no_creators():
++    """Test scoring when there are no creators."""
++    with patch("src.scorer.db.get_connection") as mock_get_conn:
++
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_get_conn.return_value.__enter__.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # No creators
++        mock_cursor.fetchall.return_value = []
++
++        result = score_all()
++
++        assert result["creators_scored"] == 0
++
++
++def test_bayesian_formula_correctness():
++    """Test that Bayesian formula is correctly implemented."""
++    # Manual calculation:
++    # avg_rating = 4.0, rating_count = 20, global_avg = 3.5, min_votes = 10
++    # weighted = (20 / (20 + 10)) * 4.0 + (10 / (20 + 10)) * 3.5
++    # weighted = (20/30) * 4.0 + (10/30) * 3.5
++    # weighted = 0.6667 * 4.0 + 0.3333 * 3.5
++    # weighted = 2.6667 + 1.1667 = 3.8333
++
++    score = calculate_bayesian_score(
++        avg_rating=4.0,
++        rating_count=20,
++        global_avg=3.5,
++        min_votes=10
++    )
++
++    expected = 3.8333
++    assert abs(score - expected) < 0.01
++
++
++def test_score_creator_rounds_correctly():
++    """Test that scores are rounded to correct precision."""
++    with patch("src.scorer.db.get_connection") as mock_get_conn:
++
++        mock_conn = MagicMock()
++        mock_cursor = MagicMock()
++        mock_get_conn.return_value.__enter__.return_value = mock_conn
++        mock_conn.cursor.return_value = mock_cursor
++
++        # avg_rating with many decimals
++        mock_cursor.fetchone.return_value = (5, 25, 4.123456)
++
++        result = score_creator(creator_id=1)
++
++        # avg_rating should be rounded to 2 decimals
++        assert result.avg_rating == 4.12
++
++        # bayesian_score should be rounded to 4 decimals
++        assert len(str(result.bayesian_score).split('.')[-1]) <= 4
