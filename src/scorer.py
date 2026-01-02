@@ -1,55 +1,82 @@
+import math
+
 from . import db
 from .models import CreatorScore
 
 
-# Default values for Bayesian averaging
-_DEFAULT_MIN_VOTES = 5
-_DEFAULT_GLOBAL_AVG = 3.5
-_UNRATED_GAME_WEIGHT = 0.2
+# Love Score constants
+# Higher threshold means more ratings needed for confidence in quality
+_BAYESIAN_MIN_VOTES = 20
+_GLOBAL_AVG = 3.5
 
-# Game count bonus for multi-game creators
-_GAME_COUNT_BONUS_BASE = 1.02  # 2% bonus per additional game
-_GAME_COUNT_BONUS_CAP = 1.10   # Max 10% bonus
+# Engagement multiplier: how much to reward total ratings
+# log(ratings)/log(1000) * 0.5 means ~1000 ratings = 1.5x, ~5000 ratings = 1.8x
+_ENGAGEMENT_LOG_BASE = 1000
+_ENGAGEMENT_WEIGHT = 0.5
 
-# Comment engagement bonus
-# Comments are treated as a popularity signal (1 comment ≈ 0.5 ratings for engagement weight)
-_COMMENT_TO_RATING_RATIO = 0.5
-_COMMENT_BONUS_THRESHOLD = 10   # Minimum comments for bonus
-_COMMENT_BONUS_BASE = 1.01      # 1% bonus per 10 comments
-_COMMENT_BONUS_CAP = 1.05       # Max 5% bonus
+# Track record multiplier: how much to reward shipping multiple games
+# sqrt(games)/15 * 0.4 means 10 games ≈ 1.08x, 30 games ≈ 1.15x, 80 games ≈ 1.24x
+_TRACK_RECORD_DIVISOR = 15
+_TRACK_RECORD_WEIGHT = 0.4
 
 
-def calculate_bayesian_score(
+def calculate_love_score(
     avg_rating: float,
-    rating_count: int,
-    global_avg: float = _DEFAULT_GLOBAL_AVG,
-    min_votes: int = _DEFAULT_MIN_VOTES
+    total_ratings: int,
+    game_count: int
 ) -> float:
     """
-    Calculate Bayesian average rating.
+    Calculate Love Score for a creator.
 
-    This weighs the creator's actual rating against a global average,
-    giving more weight to the actual rating as the number of votes increases.
+    Love Score = Quality × Engagement × Track Record
+
+    Components:
+    1. Quality: Bayesian average protects against small sample sizes
+    2. Engagement: Log-scaled bonus for total ratings (how many people love the work)
+    3. Track Record: Sqrt-scaled bonus for game count (consistency of shipping)
+
+    This formula rewards creators who:
+    - Have high-quality games (high ratings)
+    - Have broad reach (many total ratings)
+    - Ship consistently (multiple games)
 
     Args:
-        avg_rating: Creator's average rating
-        rating_count: Total number of ratings across all games
-        global_avg: Global average rating (default: 3.5)
-        min_votes: Minimum votes threshold for confidence (default: 5)
+        avg_rating: Weighted average rating across all games
+        total_ratings: Total number of ratings across all games
+        game_count: Total number of games published
 
     Returns:
-        Weighted Bayesian score
+        Love Score (typically ranges from 4.0 to 10.0)
     """
-    weighted_score = (
-        (rating_count / (rating_count + min_votes)) * avg_rating +
-        (min_votes / (rating_count + min_votes)) * global_avg
+    # 1. Quality component: Bayesian average (range: ~3.5 to ~5.0)
+    # Higher min_votes means more ratings needed before we trust the average
+    quality = (
+        (total_ratings / (total_ratings + _BAYESIAN_MIN_VOTES)) * avg_rating +
+        (_BAYESIAN_MIN_VOTES / (total_ratings + _BAYESIAN_MIN_VOTES)) * _GLOBAL_AVG
     )
-    return round(weighted_score, 4)
+
+    # 2. Engagement multiplier (range: 1.0 to ~2.0)
+    # Rewards creators whose work has reached many people
+    engagement = 1 + (
+        math.log(total_ratings + 1) / math.log(_ENGAGEMENT_LOG_BASE)
+    ) * _ENGAGEMENT_WEIGHT
+
+    # 3. Track record multiplier (range: 1.0 to ~1.4)
+    # Rewards creators who have shipped multiple games
+    # Single-game creators get no track record bonus
+    if game_count > 1:
+        track_record = 1 + (
+            math.sqrt(game_count) / _TRACK_RECORD_DIVISOR
+        ) * _TRACK_RECORD_WEIGHT
+    else:
+        track_record = 1.0
+
+    return round(quality * engagement * track_record, 4)
 
 
 def score_creator(creator_id: int) -> CreatorScore:
     """
-    Calculate score for a single creator.
+    Calculate Love Score for a single creator.
 
     Args:
         creator_id: ID of the creator to score
@@ -65,10 +92,8 @@ def score_creator(creator_id: int) -> CreatorScore:
         cursor.execute("""
             SELECT
                 COUNT(*) as total_games,
-                SUM(CASE WHEN rating IS NOT NULL THEN 1 ELSE 0 END) as rated_games,
                 SUM(CASE WHEN rating IS NOT NULL THEN rating_count ELSE 0 END) as total_ratings,
-                SUM(CASE WHEN rating IS NOT NULL THEN rating * rating_count ELSE 0 END) as weighted_rating_sum,
-                COALESCE(SUM(comment_count), 0) as total_comments
+                SUM(CASE WHEN rating IS NOT NULL THEN rating * rating_count ELSE 0 END) as weighted_rating_sum
             FROM games
             WHERE creator_id = %s
         """, (creator_id,))
@@ -87,52 +112,24 @@ def score_creator(creator_id: int) -> CreatorScore:
             )
 
         total_games = row[0] or 0
-        rated_games = row[1] or 0
-        total_ratings = row[2] or 0
-        weighted_rating_sum = float(row[3]) if row[3] else 0.0
-        total_comments = row[4] or 0
-        unrated_games = max(total_games - rated_games, 0)
+        total_ratings = row[1] or 0
+        weighted_rating_sum = float(row[2]) if row[2] else 0.0
 
         # Compute weighted average: sum of (rating * count) / total count
         if total_ratings > 0:
             avg_rating = weighted_rating_sum / total_ratings
         else:
-            avg_rating = 0.0
+            avg_rating = _GLOBAL_AVG
 
-        if rated_games == 0:
-            adjusted_avg = _DEFAULT_GLOBAL_AVG
-        else:
-            # Penalize creators with many unrated games
-            weighted_unrated = unrated_games * _UNRATED_GAME_WEIGHT
-            adjusted_avg = (
-                (avg_rating * rated_games) + (_DEFAULT_GLOBAL_AVG * weighted_unrated)
-            ) / (rated_games + weighted_unrated)
-
-        # Calculate Bayesian score using adjusted average and real ratings volume
-        bayesian_score = calculate_bayesian_score(adjusted_avg, total_ratings)
-
-        # Apply game count bonus for multi-game creators
-        if total_games > 1:
-            bonus = min(
-                _GAME_COUNT_BONUS_BASE ** (total_games - 1),
-                _GAME_COUNT_BONUS_CAP
-            )
-            bayesian_score = round(bayesian_score * bonus, 4)
-
-        # Apply comment engagement bonus
-        if total_comments >= _COMMENT_BONUS_THRESHOLD:
-            comment_bonus = min(
-                _COMMENT_BONUS_BASE ** (total_comments // _COMMENT_BONUS_THRESHOLD),
-                _COMMENT_BONUS_CAP
-            )
-            bayesian_score = round(bayesian_score * comment_bonus, 4)
+        # Calculate Love Score
+        love_score = calculate_love_score(avg_rating, total_ratings, total_games)
 
         return CreatorScore(
             creator_id=creator_id,
             game_count=total_games,
             total_ratings=total_ratings,
-            avg_rating=round(adjusted_avg, 2),
-            bayesian_score=bayesian_score
+            avg_rating=round(avg_rating, 2),
+            bayesian_score=love_score  # Using bayesian_score field for Love Score
         )
 
 

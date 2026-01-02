@@ -36,8 +36,8 @@ jobs:
       - name: Poll RSS feeds for new games
         run: python -m src.main poll
 
-      - name: Discover creators from browse pages
-        run: python -m src.main discover --pages 3
+      - name: Discover creators from browse pages (expanded sources)
+        run: python -m src.main discover --pages 5
 
       - name: Backfill creator game histories
         run: python -m src.main backfill

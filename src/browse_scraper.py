@@ -19,41 +19,74 @@ class BrowseGame(TypedDict):
     creator: str
 
 
-# Browse page configurations
+# Browse page configurations - expanded for maximum discovery
 BROWSE_PAGES = {
-    # Main discovery pages
+    # Main discovery pages (high-value)
     "top-rated": "https://itch.io/games/top-rated",
     "popular": "https://itch.io/games",
     "new-popular": "https://itch.io/games/new-and-popular",
     "top-sellers": "https://itch.io/games/top-sellers",
     "newest": "https://itch.io/games/newest",
+    "featured": "https://itch.io/games/featured",
 
-    # Genre pages
-    "horror": "https://itch.io/games/tag-horror",
-    "rpg": "https://itch.io/games/genre-rpg",
-    "puzzle": "https://itch.io/games/genre-puzzle",
-    "platformer": "https://itch.io/games/genre-platformer",
-    "adventure": "https://itch.io/games/genre-adventure",
+    # All genres
     "action": "https://itch.io/games/genre-action",
-    "visual-novel": "https://itch.io/games/genre-visual-novel",
-    "simulation": "https://itch.io/games/genre-simulation",
-    "strategy": "https://itch.io/games/genre-strategy",
+    "adventure": "https://itch.io/games/genre-adventure",
+    "card-game": "https://itch.io/games/genre-card-game",
+    "educational": "https://itch.io/games/genre-educational",
+    "fighting": "https://itch.io/games/genre-fighting",
+    "interactive-fiction": "https://itch.io/games/genre-interactive-fiction",
+    "platformer": "https://itch.io/games/genre-platformer",
+    "puzzle": "https://itch.io/games/genre-puzzle",
+    "racing": "https://itch.io/games/genre-racing",
+    "rhythm": "https://itch.io/games/genre-rhythm",
+    "roguelike": "https://itch.io/games/genre-roguelike",
+    "rpg": "https://itch.io/games/genre-rpg",
     "shooter": "https://itch.io/games/genre-shooter",
+    "simulation": "https://itch.io/games/genre-simulation",
+    "sports": "https://itch.io/games/genre-sports",
+    "strategy": "https://itch.io/games/genre-strategy",
+    "survival": "https://itch.io/games/genre-survival",
+    "visual-novel": "https://itch.io/games/genre-visual-novel",
 
-    # Popular tags
+    # Popular tags for niche discovery
+    "horror": "https://itch.io/games/tag-horror",
     "pixel-art": "https://itch.io/games/tag-pixel-art",
     "retro": "https://itch.io/games/tag-retro",
     "indie": "https://itch.io/games/tag-indie",
     "atmospheric": "https://itch.io/games/tag-atmospheric",
     "story-rich": "https://itch.io/games/tag-story-rich",
-    "roguelike": "https://itch.io/games/tag-roguelike",
     "metroidvania": "https://itch.io/games/tag-metroidvania",
+    "singleplayer": "https://itch.io/games/tag-singleplayer",
+    "multiplayer": "https://itch.io/games/tag-multiplayer",
+    "co-op": "https://itch.io/games/tag-co-op",
+    "local-multiplayer": "https://itch.io/games/tag-local-multiplayer",
+    "open-world": "https://itch.io/games/tag-open-world",
+    "short": "https://itch.io/games/tag-short",
+    "difficult": "https://itch.io/games/tag-difficult",
+    "relaxing": "https://itch.io/games/tag-relaxing",
+    "cute": "https://itch.io/games/tag-cute",
+    "dark": "https://itch.io/games/tag-dark",
+    "funny": "https://itch.io/games/tag-funny",
+    "2d": "https://itch.io/games/tag-2d",
+    "3d": "https://itch.io/games/tag-3d",
+    "top-down": "https://itch.io/games/tag-top-down",
+    "side-scroller": "https://itch.io/games/tag-side-scroller",
+    "first-person": "https://itch.io/games/tag-first-person",
+    "isometric": "https://itch.io/games/tag-isometric",
 
-    # Platform-specific (often high quality)
+    # Platforms
     "web-games": "https://itch.io/games/platform-web",
+    "windows": "https://itch.io/games/platform-windows",
+    "macos": "https://itch.io/games/platform-osx",
+    "linux": "https://itch.io/games/platform-linux",
+    "android": "https://itch.io/games/platform-android",
 
-    # Game jam entries (prolific devs)
+    # Game jams (prolific indie devs)
     "jam-games": "https://itch.io/games/in-jam",
+
+    # Physical games (different creator pool)
+    "physical": "https://itch.io/physical-games",
 }
 
 

@@ -18,8 +18,41 @@ class FeedEntry(TypedDict):
 
 
 _default_feeds = [
+    # Main feeds
     "https://itch.io/games.xml",
     "https://itch.io/games/newest.xml",
+    "https://itch.io/games/top-rated.xml",
+    "https://itch.io/games/top-sellers.xml",
+
+    # Genre RSS feeds
+    "https://itch.io/games/genre-action.xml",
+    "https://itch.io/games/genre-adventure.xml",
+    "https://itch.io/games/genre-puzzle.xml",
+    "https://itch.io/games/genre-platformer.xml",
+    "https://itch.io/games/genre-rpg.xml",
+    "https://itch.io/games/genre-shooter.xml",
+    "https://itch.io/games/genre-simulation.xml",
+    "https://itch.io/games/genre-strategy.xml",
+    "https://itch.io/games/genre-visual-novel.xml",
+
+    # Popular tag RSS feeds
+    "https://itch.io/games/tag-horror.xml",
+    "https://itch.io/games/tag-pixel-art.xml",
+    "https://itch.io/games/tag-roguelike.xml",
+    "https://itch.io/games/tag-retro.xml",
+    "https://itch.io/games/tag-metroidvania.xml",
+    "https://itch.io/games/tag-story-rich.xml",
+    "https://itch.io/games/tag-atmospheric.xml",
+    "https://itch.io/games/tag-indie.xml",
+
+    # Platform feeds
+    "https://itch.io/games/platform-web.xml",
+    "https://itch.io/games/platform-windows.xml",
+    "https://itch.io/games/platform-osx.xml",
+    "https://itch.io/games/platform-linux.xml",
+
+    # Game jam discoveries
+    "https://itch.io/games/in-jam.xml",
 ]
 
 
