@@ -35,6 +35,7 @@ def enrich_game(game: Game) -> bool:
         rating=rating_data["rating"],
         rating_count=rating_data["rating_count"],
         comment_count=rating_data["comment_count"],
+        description=rating_data["description"],
         ratings_hidden=ratings_hidden
     )
 

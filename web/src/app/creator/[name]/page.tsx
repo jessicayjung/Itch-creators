@@ -109,14 +109,11 @@ export default async function CreatorPage({ params }: Props) {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Title
                     </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Description & Stats
+                    </th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-32">
                       Published
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-24">
-                      Rating
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-24">
-                      Votes
                     </th>
                   </tr>
                 </thead>
@@ -136,16 +133,30 @@ export default async function CreatorPage({ params }: Props) {
                           {game.title}
                         </a>
                       </td>
+                      <td className="px-4 py-3">
+                        {game.description && (
+                          <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-2 line-clamp-2">
+                            {game.description}
+                          </div>
+                        )}
+                        <div className="flex gap-4 text-xs text-zinc-500 dark:text-zinc-500">
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium text-zinc-900 dark:text-zinc-100 font-mono">
+                              {game.rating?.toFixed(2)}
+                            </span>
+                            <span>({game.rating_count.toLocaleString()} ratings)</span>
+                          </div>
+                          {game.comment_count > 0 && (
+                            <div>
+                              {game.comment_count.toLocaleString()} comments
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400">
                         {game.publish_date
                           ? new Date(game.publish_date).toLocaleDateString()
                           : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-medium text-zinc-900 dark:text-zinc-100 font-mono">
-                        {game.rating?.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400 font-mono">
-                        {game.rating_count.toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -167,6 +178,9 @@ export default async function CreatorPage({ params }: Props) {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Title
                     </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Description & Stats
+                    </th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-32">
                       Published
                     </th>
@@ -187,6 +201,18 @@ export default async function CreatorPage({ params }: Props) {
                         >
                           {game.title}
                         </a>
+                      </td>
+                      <td className="px-4 py-3">
+                        {game.description && (
+                          <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-2 line-clamp-2">
+                            {game.description}
+                          </div>
+                        )}
+                        {game.comment_count > 0 && (
+                          <div className="text-xs text-zinc-500 dark:text-zinc-500">
+                            {game.comment_count.toLocaleString()} comments
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400">
                         {game.publish_date

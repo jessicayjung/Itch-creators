@@ -80,6 +80,7 @@ def create_tables() -> None:
                 ratings_hidden BOOLEAN DEFAULT FALSE,
                 ratings_hidden_until TIMESTAMP,
                 comment_count INTEGER DEFAULT 0,
+                description TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -93,6 +94,9 @@ def create_tables() -> None:
         """)
         cursor.execute("""
             ALTER TABLE games ADD COLUMN IF NOT EXISTS comment_count INTEGER DEFAULT 0
+        """)
+        cursor.execute("""
+            ALTER TABLE games ADD COLUMN IF NOT EXISTS description TEXT
         """)
 
         cursor.execute("""
@@ -163,7 +167,9 @@ def insert_game(game: Game) -> int:
                 rating, rating_count, scraped_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (itch_id) DO NOTHING
+            ON CONFLICT (itch_id) DO UPDATE SET
+                title = CASE WHEN EXCLUDED.title != '' THEN EXCLUDED.title ELSE games.title END,
+                publish_date = COALESCE(EXCLUDED.publish_date, games.publish_date)
             RETURNING id
             """,
             (
@@ -249,6 +255,8 @@ def get_unenriched_games() -> list[Game]:
                 publish_date=row["publish_date"],
                 rating=float(row["rating"]) if row["rating"] is not None else None,
                 rating_count=row["rating_count"],
+                comment_count=row["comment_count"] if row["comment_count"] is not None else 0,
+                description=row["description"],
                 scraped_at=row["scraped_at"]
             )
             for row in rows
@@ -260,40 +268,42 @@ def update_game_ratings(
     rating: float | None,
     rating_count: int,
     comment_count: int = 0,
+    description: str | None = None,
     ratings_hidden: bool = False
 ) -> None:
-    """Update game ratings, comment count, and mark as scraped.
+    """Update game ratings, comment count, description, and mark as scraped.
 
     Args:
         game_id: ID of the game to update
         rating: The game's rating (None if not available)
         rating_count: Number of ratings
         comment_count: Number of comments on the game
+        description: Short description/summary of the game
         ratings_hidden: If True, ratings were hidden and should be retried later
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         if ratings_hidden:
             # Set retry cooldown (7 days) without marking as fully scraped
-            # Still update comment_count as it's always available
+            # Still update comment_count and description as they're always available
             cursor.execute(
                 """
                 UPDATE games
                 SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days',
-                    comment_count = %s
+                    comment_count = %s, description = %s
                 WHERE id = %s
                 """,
-                (comment_count, game_id)
+                (comment_count, description, game_id)
             )
         else:
             cursor.execute(
                 """
                 UPDATE games
-                SET rating = %s, rating_count = %s, comment_count = %s, scraped_at = %s,
-                    ratings_hidden = FALSE, ratings_hidden_until = NULL
+                SET rating = %s, rating_count = %s, comment_count = %s, description = %s,
+                    scraped_at = %s, ratings_hidden = FALSE, ratings_hidden_until = NULL
                 WHERE id = %s
                 """,
-                (rating, rating_count, comment_count, datetime.now(), game_id)
+                (rating, rating_count, comment_count, description, datetime.now(), game_id)
             )
         cursor.close()
 

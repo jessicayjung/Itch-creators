@@ -19,7 +19,8 @@ function getFilterCondition(filter: LeaderboardFilter): string {
 }
 
 export async function getRankedCreators(
-  limit = 100,
+  limit = 50,
+  offset = 0,
   filter: LeaderboardFilter = 'qualified'
 ): Promise<RankedCreator[]> {
   const filterCondition = getFilterCondition(filter);
@@ -49,8 +50,8 @@ export async function getRankedCreators(
     WHERE cs.bayesian_score IS NOT NULL
     ${filterCondition}
     ORDER BY cs.bayesian_score DESC NULLS LAST
-    LIMIT $1
-  `, [limit]);
+    LIMIT $1 OFFSET $2
+  `, [limit, offset]);
 
   return rows.map((row) => ({
     rank: Number(row.rank),
@@ -82,7 +83,7 @@ export async function getCreatorByName(name: string): Promise<CreatorWithGames |
 
   // Get games
   const { rows: gameRows } = await sql`
-    SELECT id, itch_id, title, creator_id, url, publish_date, rating, rating_count, scraped_at, created_at
+    SELECT id, itch_id, title, creator_id, url, publish_date, rating, rating_count, comment_count, description, scraped_at, created_at
     FROM games
     WHERE creator_id = ${creator.id}
     ORDER BY publish_date DESC NULLS LAST
@@ -97,6 +98,8 @@ export async function getCreatorByName(name: string): Promise<CreatorWithGames |
     publish_date: row.publish_date,
     rating: row.rating ? Number(row.rating) : null,
     rating_count: row.rating_count ?? 0,
+    comment_count: row.comment_count ?? 0,
+    description: row.description ?? null,
     scraped_at: row.scraped_at,
     created_at: row.created_at,
   }));

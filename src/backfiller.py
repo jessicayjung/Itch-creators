@@ -54,6 +54,8 @@ def backfill_creator(creator: Creator) -> int:
                 publish_date=game_data["publish_date"].date() if game_data["publish_date"] else None,
                 rating=None,
                 rating_count=0,
+                comment_count=0,
+                description=None,
                 scraped_at=None
             )
 

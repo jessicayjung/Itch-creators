@@ -28,8 +28,15 @@ def parse_profile(html: str) -> tuple[list[ProfileGame], str | None]:
     game_cells = soup.find_all("div", class_="game_cell")
 
     for cell in game_cells:
-        # Extract title and URL
-        title_link = cell.find("a", class_="game_link")
+        # Extract title and URL - specifically look for the title link, not the thumbnail link
+        # The title link has class "title game_link", thumbnail has "thumb_link game_link"
+        title_link = cell.find("a", class_="title")
+        if not title_link:
+            # Fallback: try finding any game_link with text content
+            for link in cell.find_all("a", class_="game_link"):
+                if link.get_text(strip=True):
+                    title_link = link
+                    break
         if not title_link:
             continue
 

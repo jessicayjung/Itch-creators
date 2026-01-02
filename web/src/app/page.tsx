@@ -5,8 +5,10 @@ import type { LeaderboardFilter } from "@/lib/types";
 export const dynamic = "force-dynamic"; // Always render on request
 
 interface PageProps {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; page?: string }>;
 }
+
+const PAGE_SIZE = 50;
 
 const FILTERS: { value: LeaderboardFilter; label: string }[] = [
   { value: 'qualified', label: 'Qualified' },
@@ -19,11 +21,15 @@ const FILTERS: { value: LeaderboardFilter; label: string }[] = [
 export default async function Home({ searchParams }: PageProps) {
   const params = await searchParams;
   const filter = (params.filter as LeaderboardFilter) || 'qualified';
+  const page = Math.max(1, parseInt(params.page || '1', 10));
+  const offset = (page - 1) * PAGE_SIZE;
 
   const [creators, totalCount] = await Promise.all([
-    getRankedCreators(100, filter),
+    getRankedCreators(PAGE_SIZE, offset, filter),
     getTotalCreatorCount(filter),
   ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <div>
@@ -136,6 +142,61 @@ export default async function Home({ searchParams }: PageProps) {
       {creators.length === 0 && (
         <div className="text-center py-12 text-zinc-500 dark:text-zinc-400">
           No creators found matching this filter.
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-zinc-500 dark:text-zinc-400">
+            Page {page} of {totalPages} ({totalCount} creators)
+          </div>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={`/?filter=${filter}&page=${page - 1}`}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                Previous
+              </Link>
+            )}
+            {/* Page numbers */}
+            <div className="flex gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (page <= 3) {
+                  pageNum = i + 1;
+                } else if (page >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = page - 2 + i;
+                }
+                return (
+                  <Link
+                    key={pageNum}
+                    href={`/?filter=${filter}&page=${pageNum}`}
+                    className={`w-10 h-10 flex items-center justify-center text-sm font-medium rounded-lg transition-colors ${
+                      page === pageNum
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {pageNum}
+                  </Link>
+                );
+              })}
+            </div>
+            {page < totalPages && (
+              <Link
+                href={`/?filter=${filter}&page=${page + 1}`}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                Next
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>

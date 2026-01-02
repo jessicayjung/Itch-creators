@@ -39,8 +39,8 @@ def test_create_tables(mock_env):
 
         # Verify connection was established
         mock_connect.assert_called_once()
-        # Verify SQL was executed: 3 tables + 2 ALTER TABLEs (ratings_hidden columns) + 2 indexes
-        assert mock_cursor.execute.call_count == 8  # 3 CREATE TABLE + 3 ALTER TABLE + 2 CREATE INDEX
+        # Verify SQL was executed: 3 tables + 4 ALTER TABLEs (ratings_hidden + comment_count + description) + 2 indexes
+        assert mock_cursor.execute.call_count == 9  # 3 CREATE TABLE + 4 ALTER TABLE + 2 CREATE INDEX
         mock_conn.commit.assert_called_once()
         mock_conn.close.assert_called_once()
 
@@ -89,6 +89,8 @@ def test_insert_game(mock_env):
             publish_date=date(2024, 1, 1),
             rating=None,
             rating_count=0,
+            comment_count=0,
+            description=None,
             scraped_at=None
         )
 
@@ -187,6 +189,8 @@ def test_get_unenriched_games(mock_env):
                 "publish_date": date(2024, 1, 1),
                 "rating": None,
                 "rating_count": 0,
+                "comment_count": 0,
+                "description": None,
                 "scraped_at": None
             }
         ]
@@ -216,6 +220,8 @@ def test_get_unenriched_games_with_zero_rating(mock_env):
                 "publish_date": date(2024, 1, 1),
                 "rating": 0.0,  # Zero rating should be preserved
                 "rating_count": 10,
+                "comment_count": 0,
+                "description": None,
                 "scraped_at": None
             }
         ]
@@ -245,6 +251,8 @@ def test_get_unenriched_games_with_null_creator(mock_env):
                 "publish_date": date(2024, 1, 1),
                 "rating": None,
                 "rating_count": 0,
+                "comment_count": 0,
+                "description": None,
                 "scraped_at": None
             }
         ]
@@ -264,14 +272,15 @@ def test_update_game_ratings(mock_env):
         mock_connect.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        update_game_ratings(1, 4.5, 100, comment_count=25)
+        update_game_ratings(1, 4.5, 100, comment_count=25, description="A cool game")
 
         mock_cursor.execute.assert_called_once()
         args = mock_cursor.execute.call_args[0]
         assert args[1][0] == 4.5  # rating
         assert args[1][1] == 100  # rating_count
         assert args[1][2] == 25   # comment_count
-        assert args[1][4] == 1    # game_id
+        assert args[1][3] == "A cool game"  # description
+        assert args[1][5] == 1    # game_id
 
 
 def test_mark_creator_backfilled(mock_env):

@@ -16,6 +16,8 @@ export interface Game {
   publish_date: Date | null;
   rating: number | null;
   rating_count: number;
+  comment_count: number;
+  description: string | null;
   scraped_at: Date | null;
   created_at: Date;
 }

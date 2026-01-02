@@ -64,6 +64,8 @@ def cmd_poll(args):
             publish_date=entry["publish_date"].date() if entry["publish_date"] else None,
             rating=None,
             rating_count=0,
+            comment_count=0,
+            description=None,
             scraped_at=None
         )
 

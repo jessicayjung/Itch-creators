@@ -12,6 +12,8 @@ class Game:
     publish_date: date | None
     rating: float | None
     rating_count: int
+    comment_count: int
+    description: str | None
     scraped_at: datetime | None
 
 
