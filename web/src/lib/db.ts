@@ -59,7 +59,12 @@ export async function getRankedCreators(
     // Use raw query to allow dynamic filter conditions
     const { rows } = await client.query(`
       SELECT
-        ROW_NUMBER() OVER (ORDER BY cs.bayesian_score DESC NULLS LAST) as rank,
+        ROW_NUMBER() OVER (
+          ORDER BY cs.bayesian_score DESC NULLS LAST,
+                   cs.total_ratings DESC,
+                   cs.game_count DESC,
+                   c.id
+        ) as rank,
         c.id,
         c.name,
         c.profile_url,
@@ -80,7 +85,10 @@ export async function getRankedCreators(
       ) lg ON true
       WHERE cs.bayesian_score IS NOT NULL
       ${filterCondition}
-      ORDER BY cs.bayesian_score DESC NULLS LAST
+      ORDER BY cs.bayesian_score DESC NULLS LAST,
+               cs.total_ratings DESC,
+               cs.game_count DESC,
+               c.id
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
 

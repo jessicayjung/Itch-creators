@@ -1,0 +1,43 @@
+name: Daily Scrape
+
+on:
+  schedule:
+    # Run at 6:00 AM UTC every day
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Initialize database (if needed)
+        run: python -m src.main init-db
+
+      - name: Poll for new games
+        run: python -m src.main poll
+
+      - name: Backfill creator games
+        run: python -m src.main backfill
+
+      - name: Enrich game data
+        run: python -m src.main enrich
+
+      - name: Calculate scores
+        run: python -m src.main score

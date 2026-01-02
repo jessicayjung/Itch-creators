@@ -31,16 +31,22 @@ def parse_profile(html: str) -> tuple[list[ProfileGame], str | None]:
         # Extract title and URL - specifically look for the title link, not the thumbnail link
         # The title link has class "title game_link", thumbnail has "thumb_link game_link"
         title_link = cell.find("a", class_="title")
-        if not title_link:
+        title = title_link.get_text(strip=True) if title_link else ""
+
+        # If no title found, try fallback methods
+        if not title:
             # Fallback: try finding any game_link with text content
             for link in cell.find_all("a", class_="game_link"):
-                if link.get_text(strip=True):
+                text = link.get_text(strip=True)
+                if text:
                     title_link = link
+                    title = text
                     break
-        if not title_link:
+
+        # Skip games with no title
+        if not title or not title_link:
             continue
 
-        title = title_link.get_text(strip=True)
         url = title_link.get("href", "")
 
         # Extract publish date if available

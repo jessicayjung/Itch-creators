@@ -131,8 +131,11 @@ export default async function CreatorPage({ params }: Props) {
                           rel="noopener noreferrer"
                           className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400"
                         >
-                          {game.title}
+                          {game.title || game.url.split('/').pop() || 'Untitled'}
                         </a>
+                        {!game.title && (
+                          <span className="ml-2 text-xs text-zinc-400">(title pending)</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {game.description && (
@@ -158,7 +161,7 @@ export default async function CreatorPage({ params }: Props) {
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400">
                         {game.publish_date
-                          ? new Date(game.publish_date).toLocaleDateString()
+                          ? new Date(game.publish_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
                           : "-"}
                       </td>
                     </tr>
@@ -204,8 +207,11 @@ export default async function CreatorPage({ params }: Props) {
                           rel="noopener noreferrer"
                           className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400"
                         >
-                          {game.title}
+                          {game.title || game.url.split('/').pop() || 'Untitled'}
                         </a>
+                        {!game.title && (
+                          <span className="ml-2 text-xs text-zinc-400">(title pending)</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {game.description && (
@@ -223,7 +229,7 @@ export default async function CreatorPage({ params }: Props) {
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400">
                         {game.publish_date
-                          ? new Date(game.publish_date).toLocaleDateString()
+                          ? new Date(game.publish_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
                           : "-"}
                       </td>
                     </tr>

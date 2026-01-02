@@ -68,7 +68,7 @@ export default async function Home({ searchParams }: PageProps) {
             <div className="flex gap-1">
               {page > 1 && (
                 <Link
-                  href={`/?filter=${filter}&page=${page - 1}`}
+                  href={filter === 'qualified' ? `/?page=${page - 1}` : `/?filter=${filter}&page=${page - 1}`}
                   className="px-3 py-1 text-sm font-medium rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                 >
                   Prev
@@ -76,7 +76,7 @@ export default async function Home({ searchParams }: PageProps) {
               )}
               {page < totalPages && (
                 <Link
-                  href={`/?filter=${filter}&page=${page + 1}`}
+                  href={filter === 'qualified' ? `/?page=${page + 1}` : `/?filter=${filter}&page=${page + 1}`}
                   className="px-3 py-1 text-sm font-medium rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                 >
                   Next
@@ -138,10 +138,10 @@ export default async function Home({ searchParams }: PageProps) {
                   </a>
                 </td>
                 <td className="px-4 py-3">
-                  {creator.latest_game_title ? (
+                  {(creator.latest_game_title || creator.latest_game_date) ? (
                     <div className="text-sm">
                       <span className="text-zinc-700 dark:text-zinc-300">
-                        {creator.latest_game_title}
+                        {creator.latest_game_title || '(title pending)'}
                       </span>
                       {creator.latest_game_date && (
                         <span className="ml-2 text-xs text-zinc-400">
@@ -184,7 +184,7 @@ export default async function Home({ searchParams }: PageProps) {
           <div className="flex gap-2">
             {page > 1 && (
               <Link
-                href={`/?filter=${filter}&page=${page - 1}`}
+                href={filter === 'qualified' ? `/?page=${page - 1}` : `/?filter=${filter}&page=${page - 1}`}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 Previous
@@ -206,7 +206,7 @@ export default async function Home({ searchParams }: PageProps) {
                 return (
                   <Link
                     key={pageNum}
-                    href={`/?filter=${filter}&page=${pageNum}`}
+                    href={filter === 'qualified' ? `/?page=${pageNum}` : `/?filter=${filter}&page=${pageNum}`}
                     className={`w-10 h-10 flex items-center justify-center text-sm font-medium rounded-lg transition-colors ${
                       page === pageNum
                         ? 'bg-slate-800 text-white'
@@ -220,7 +220,7 @@ export default async function Home({ searchParams }: PageProps) {
             </div>
             {page < totalPages && (
               <Link
-                href={`/?filter=${filter}&page=${page + 1}`}
+                href={filter === 'qualified' ? `/?page=${page + 1}` : `/?filter=${filter}&page=${page + 1}`}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 Next

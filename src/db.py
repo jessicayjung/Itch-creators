@@ -303,9 +303,11 @@ def update_game_ratings(
     rating_count: int,
     comment_count: int = 0,
     description: str | None = None,
+    publish_date: datetime | None = None,
+    title: str | None = None,
     ratings_hidden: bool = False
 ) -> None:
-    """Update game ratings, comment count, description, and mark as scraped.
+    """Update game ratings, comment count, description, publish_date, title, and mark as scraped.
 
     Args:
         game_id: ID of the game to update
@@ -313,31 +315,38 @@ def update_game_ratings(
         rating_count: Number of ratings
         comment_count: Number of comments on the game
         description: Short description/summary of the game
+        publish_date: When the game was published (only updates if currently NULL)
+        title: Game title (only updates if currently empty)
         ratings_hidden: If True, ratings were hidden and should be retried later
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         if ratings_hidden:
             # Set retry cooldown (7 days) without marking as fully scraped
-            # Still update comment_count and description as they're always available
+            # Still update comment_count, description, and title as they're always available
             cursor.execute(
                 """
                 UPDATE games
                 SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days',
-                    comment_count = %s, description = %s
+                    comment_count = %s, description = %s,
+                    publish_date = COALESCE(publish_date, %s),
+                    title = CASE WHEN title = '' OR title IS NULL THEN %s ELSE title END
                 WHERE id = %s
                 """,
-                (comment_count, description, game_id)
+                (comment_count, description, publish_date.date() if publish_date else None, title, game_id)
             )
         else:
             cursor.execute(
                 """
                 UPDATE games
                 SET rating = %s, rating_count = %s, comment_count = %s, description = %s,
+                    publish_date = COALESCE(publish_date, %s),
+                    title = CASE WHEN title = '' OR title IS NULL THEN %s ELSE title END,
                     scraped_at = %s, ratings_hidden = FALSE, ratings_hidden_until = NULL
                 WHERE id = %s
                 """,
-                (rating, rating_count, comment_count, description, datetime.now(), game_id)
+                (rating, rating_count, comment_count, description,
+                 publish_date.date() if publish_date else None, title, datetime.now(), game_id)
             )
         cursor.close()
 
