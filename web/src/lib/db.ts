@@ -1,6 +1,12 @@
 import { Pool, PoolClient } from "pg";
 import type { RankedCreator, CreatorWithGames, Game, CreatorScore, LeaderboardFilter, LeaderboardSort } from "./types";
 
+// Format date as "Mon DD, YYYY"
+function formatDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // Module-level pool variable (initialized lazily)
 let _pool: Pool | null = null;
 
@@ -119,7 +125,7 @@ export async function getRankedCreators(
       avg_rating: row.avg_rating ? Number(row.avg_rating) : null,
       bayesian_score: row.bayesian_score ? Number(row.bayesian_score) : null,
       latest_game_title: row.latest_game_title ?? null,
-      latest_game_date: row.latest_game_date ? String(row.latest_game_date).split('T')[0] : null,
+      latest_game_date: row.latest_game_date ? formatDate(row.latest_game_date) : null,
     }));
   } finally {
     client.release();

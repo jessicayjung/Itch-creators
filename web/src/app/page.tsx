@@ -188,7 +188,7 @@ export default async function Home({ searchParams }: PageProps) {
                       </span>
                       {creator.latest_game_date && (
                         <span className="ml-2 text-xs text-zinc-400">
-                          {new Date(creator.latest_game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {creator.latest_game_date}
                         </span>
                       )}
                     </div>
