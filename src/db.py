@@ -268,17 +268,25 @@ def get_unbackfilled_creators() -> list[Creator]:
         ]
 
 
-def get_unenriched_games() -> list[Game]:
-    """Fetch all games that haven't been scraped for ratings or need re-enrichment."""
+def get_unenriched_games(limit: int | None = None) -> list[Game]:
+    """Fetch games that haven't been scraped for ratings or need re-enrichment.
+
+    Args:
+        limit: Maximum number of games to return. None for unlimited.
+    """
     with get_connection() as conn:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("""
+        query = """
             SELECT g.*, c.name as creator_name
             FROM games g
             LEFT JOIN creators c ON g.creator_id = c.id
             WHERE g.scraped_at IS NULL
                OR (g.ratings_hidden = TRUE AND g.ratings_hidden_until < NOW())
-        """)
+            ORDER BY g.id
+        """
+        if limit:
+            query += f" LIMIT {limit}"
+        cursor.execute(query)
         rows = cursor.fetchall()
         cursor.close()
 

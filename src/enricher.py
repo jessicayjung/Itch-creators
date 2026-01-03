@@ -47,9 +47,12 @@ def enrich_game(game: Game) -> bool:
     return True
 
 
-def enrich_all() -> dict[str, int]:
+def enrich_all(limit: int | None = None) -> dict[str, int]:
     """
-    Process all unenriched games.
+    Process unenriched games.
+
+    Args:
+        limit: Maximum number of games to process. None for unlimited.
 
     Returns:
         Dictionary with stats: {games_processed, errors}
@@ -59,7 +62,7 @@ def enrich_all() -> dict[str, int]:
         "errors": 0,
     }
 
-    games = db.get_unenriched_games()
+    games = db.get_unenriched_games(limit=limit)
 
     for game in games:
         try:

@@ -87,8 +87,10 @@ def cmd_backfill(args):
 
 def cmd_enrich(args):
     """Enrich games with ratings."""
+    limit = getattr(args, 'limit', None)
+
     with LogContext(logger, "Enriching game ratings"):
-        stats = enricher.enrich_all()
+        stats = enricher.enrich_all(limit=limit)
 
     logger.info(f"Results: games_processed={stats['games_processed']}, errors={stats['errors']}")
 
@@ -237,7 +239,8 @@ def main():
     subparsers.add_parser("backfill", help="Backfill creator game histories")
 
     # enrich command
-    subparsers.add_parser("enrich", help="Enrich games with ratings")
+    enrich_parser = subparsers.add_parser("enrich", help="Enrich games with ratings")
+    enrich_parser.add_argument("--limit", type=int, default=None, help="Max games to process per run (default: unlimited)")
 
     # score command
     subparsers.add_parser("score", help="Recalculate creator scores")
