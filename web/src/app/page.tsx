@@ -1,31 +1,39 @@
 import Link from "next/link";
 import { getRankedCreators, getTotalCreatorCount } from "@/lib/db";
-import type { LeaderboardFilter } from "@/lib/types";
+import type { LeaderboardFilter, LeaderboardSort } from "@/lib/types";
+import PageJumpInput from "@/components/PageJumpInput";
 
 export const dynamic = "force-dynamic"; // Always render on request
 
 interface PageProps {
-  searchParams: Promise<{ filter?: string; page?: string }>;
+  searchParams: Promise<{ filter?: string; page?: string; sort?: string }>;
 }
 
 const PAGE_SIZE = 50;
 
 const FILTERS: { value: LeaderboardFilter; label: string }[] = [
-  { value: 'qualified', label: 'Qualified' },
+  { value: 'all', label: 'All' },
   { value: 'multi-game', label: '2+ Games' },
   { value: 'well-rated', label: '10+ Ratings' },
   { value: 'rising', label: 'Rising' },
-  { value: 'all', label: 'All' },
+];
+
+const SORTS: { value: LeaderboardSort; label: string }[] = [
+  { value: 'score', label: 'Score' },
+  { value: 'games', label: 'Games' },
+  { value: 'ratings', label: 'Ratings' },
+  { value: 'avg', label: 'Avg Rating' },
 ];
 
 export default async function Home({ searchParams }: PageProps) {
   const params = await searchParams;
-  const filter = (params.filter as LeaderboardFilter) || 'qualified';
+  const filter = (params.filter as LeaderboardFilter) || 'all';
+  const sort = (params.sort as LeaderboardSort) || 'score';
   const page = Math.max(1, parseInt(params.page || '1', 10));
   const offset = (page - 1) * PAGE_SIZE;
 
   const [creators, totalCount] = await Promise.all([
-    getRankedCreators(PAGE_SIZE, offset, filter),
+    getRankedCreators(PAGE_SIZE, offset, filter, sort),
     getTotalCreatorCount(filter),
   ]);
 
@@ -42,22 +50,54 @@ export default async function Home({ searchParams }: PageProps) {
         </p>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter and Sort Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div className="flex gap-2">
-          {FILTERS.map((f) => (
-            <Link
-              key={f.value}
-              href={f.value === 'qualified' ? '/' : `/?filter=${f.value}`}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                filter === f.value
-                  ? 'bg-slate-800 text-white'
-                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-              }`}
-            >
-              {f.label}
-            </Link>
-          ))}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex gap-2">
+            {FILTERS.map((f) => {
+              const href = new URLSearchParams();
+              if (f.value !== 'all') href.set('filter', f.value);
+              if (sort !== 'score') href.set('sort', sort);
+              const query = href.toString();
+              return (
+                <Link
+                  key={f.value}
+                  href={query ? `/?${query}` : '/'}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    filter === f.value
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  {f.label}
+                </Link>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">Sort:</span>
+            <div className="flex gap-1">
+              {SORTS.map((s) => {
+                const href = new URLSearchParams();
+                if (filter !== 'all') href.set('filter', filter);
+                if (s.value !== 'score') href.set('sort', s.value);
+                const query = href.toString();
+                return (
+                  <Link
+                    key={s.value}
+                    href={query ? `/?${query}` : '/'}
+                    className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+                      sort === s.value
+                        ? 'bg-slate-600 text-white'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {s.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </div>
         {/* Top Pagination */}
         {totalPages > 1 && (
@@ -68,7 +108,7 @@ export default async function Home({ searchParams }: PageProps) {
             <div className="flex gap-1">
               {page > 1 && (
                 <Link
-                  href={filter === 'qualified' ? `/?page=${page - 1}` : `/?filter=${filter}&page=${page - 1}`}
+                  href={`/?${new URLSearchParams({ ...(filter !== 'all' && { filter }), ...(sort !== 'score' && { sort }), page: String(page - 1) }).toString()}`}
                   className="px-3 py-1 text-sm font-medium rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                 >
                   Prev
@@ -76,7 +116,7 @@ export default async function Home({ searchParams }: PageProps) {
               )}
               {page < totalPages && (
                 <Link
-                  href={filter === 'qualified' ? `/?page=${page + 1}` : `/?filter=${filter}&page=${page + 1}`}
+                  href={`/?${new URLSearchParams({ ...(filter !== 'all' && { filter }), ...(sort !== 'score' && { sort }), page: String(page + 1) }).toString()}`}
                   className="px-3 py-1 text-sm font-medium rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                 >
                   Next
@@ -106,6 +146,9 @@ export default async function Home({ searchParams }: PageProps) {
               </th>
               <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-24">
                 Ratings
+              </th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-20">
+                Avg
               </th>
               <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-20">
                 Score
@@ -159,6 +202,9 @@ export default async function Home({ searchParams }: PageProps) {
                 <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400 font-mono">
                   {creator.total_ratings.toLocaleString()}
                 </td>
+                <td className="px-4 py-3 text-right text-sm text-zinc-600 dark:text-zinc-400 font-mono">
+                  {creator.avg_rating?.toFixed(2) ?? "-"}
+                </td>
                 <td className="px-4 py-3 text-right text-sm font-medium text-zinc-900 dark:text-zinc-100 font-mono">
                   {creator.bayesian_score?.toFixed(2) ?? "-"}
                 </td>
@@ -178,13 +224,16 @@ export default async function Home({ searchParams }: PageProps) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-6">
-          <div className="text-sm text-zinc-500 dark:text-zinc-400">
-            Page {page} of {totalPages} ({totalCount} creators)
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400">
+              Page {page} of {totalPages} ({totalCount} creators)
+            </div>
+            <PageJumpInput currentPage={page} totalPages={totalPages} filter={filter} sort={sort} />
           </div>
           <div className="flex gap-2">
             {page > 1 && (
               <Link
-                href={filter === 'qualified' ? `/?page=${page - 1}` : `/?filter=${filter}&page=${page - 1}`}
+                href={`/?${new URLSearchParams({ ...(filter !== 'all' && { filter }), ...(sort !== 'score' && { sort }), page: String(page - 1) }).toString()}`}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 Previous
@@ -206,7 +255,7 @@ export default async function Home({ searchParams }: PageProps) {
                 return (
                   <Link
                     key={pageNum}
-                    href={filter === 'qualified' ? `/?page=${pageNum}` : `/?filter=${filter}&page=${pageNum}`}
+                    href={`/?${new URLSearchParams({ ...(filter !== 'all' && { filter }), ...(sort !== 'score' && { sort }), page: String(pageNum) }).toString()}`}
                     className={`w-10 h-10 flex items-center justify-center text-sm font-medium rounded-lg transition-colors ${
                       page === pageNum
                         ? 'bg-slate-800 text-white'
@@ -220,7 +269,7 @@ export default async function Home({ searchParams }: PageProps) {
             </div>
             {page < totalPages && (
               <Link
-                href={filter === 'qualified' ? `/?page=${page + 1}` : `/?filter=${filter}&page=${page + 1}`}
+                href={`/?${new URLSearchParams({ ...(filter !== 'all' && { filter }), ...(sort !== 'score' && { sort }), page: String(page + 1) }).toString()}`}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 Next

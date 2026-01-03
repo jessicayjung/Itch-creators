@@ -46,11 +46,16 @@ export interface RankedCreator {
 }
 
 export type LeaderboardFilter =
-  | 'qualified'    // game_count >= 2 OR total_ratings >= 5
   | 'multi-game'   // game_count >= 2
   | 'well-rated'   // total_ratings >= 10
-  | 'rising'       // 1 game with 1-4 ratings
+  | 'rising'       // highly rated games published in 2025+
   | 'all';         // no filter
+
+export type LeaderboardSort =
+  | 'score'        // Bayesian score (default)
+  | 'games'        // Number of games
+  | 'ratings'      // Total ratings
+  | 'avg';         // Average rating
 
 export interface CreatorWithGames extends Creator {
   games: Game[];

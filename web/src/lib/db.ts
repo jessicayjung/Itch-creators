@@ -1,5 +1,5 @@
 import { Pool, PoolClient } from "pg";
-import type { RankedCreator, CreatorWithGames, Game, CreatorScore, LeaderboardFilter } from "./types";
+import type { RankedCreator, CreatorWithGames, Game, CreatorScore, LeaderboardFilter, LeaderboardSort } from "./types";
 
 // Module-level pool variable (initialized lazily)
 let _pool: Pool | null = null;
@@ -33,37 +33,57 @@ export async function closePool(): Promise<void> {
 // Build filter condition for leaderboard queries
 function getFilterCondition(filter: LeaderboardFilter): string {
   switch (filter) {
-    case 'qualified':
-      return 'AND (cs.game_count >= 2 OR cs.total_ratings >= 5)';
     case 'multi-game':
       return 'AND cs.game_count >= 2';
     case 'well-rated':
       return 'AND cs.total_ratings >= 10';
     case 'rising':
-      return 'AND cs.game_count = 1 AND cs.total_ratings BETWEEN 1 AND 4';
+      // Creators with highly rated games (4.0+) published in 2025 or later
+      return `AND EXISTS (
+        SELECT 1 FROM games g
+        WHERE g.creator_id = c.id
+          AND g.publish_date >= '2025-01-01'
+          AND g.rating >= 4.0
+      )`;
     case 'all':
     default:
       return '';
   }
 }
 
+// Build ORDER BY clause based on sort option
+// Weights higher game count over perfect ratings with fewer games
+function getSortOrder(sort: LeaderboardSort): string {
+  switch (sort) {
+    case 'games':
+      return `cs.game_count DESC, cs.bayesian_score DESC NULLS LAST, cs.total_ratings DESC, c.id`;
+    case 'ratings':
+      return `cs.total_ratings DESC, cs.game_count DESC, cs.bayesian_score DESC NULLS LAST, c.id`;
+    case 'avg':
+      return `cs.avg_rating DESC NULLS LAST, cs.game_count DESC, cs.total_ratings DESC, c.id`;
+    case 'score':
+    default:
+      // Default: Bayesian score with game count as strong tiebreaker
+      return `cs.bayesian_score DESC NULLS LAST, cs.game_count DESC, cs.total_ratings DESC, c.id`;
+  }
+}
+
 export async function getRankedCreators(
   limit = 50,
   offset = 0,
-  filter: LeaderboardFilter = 'qualified'
+  filter: LeaderboardFilter = 'all',
+  sort: LeaderboardSort = 'score'
 ): Promise<RankedCreator[]> {
   const filterCondition = getFilterCondition(filter);
+  const sortOrder = getSortOrder(sort);
   const client = await getConnection();
 
   try {
-    // Use raw query to allow dynamic filter conditions
+    // Use raw query to allow dynamic filter and sort conditions
     const { rows } = await client.query(`
       SELECT
         ROW_NUMBER() OVER (
-          ORDER BY cs.bayesian_score DESC NULLS LAST,
-                   cs.total_ratings DESC,
-                   cs.game_count DESC,
-                   c.id
+          ORDER BY ${sortOrder}
         ) as rank,
         c.id,
         c.name,
@@ -85,10 +105,7 @@ export async function getRankedCreators(
       ) lg ON true
       WHERE cs.bayesian_score IS NOT NULL
       ${filterCondition}
-      ORDER BY cs.bayesian_score DESC NULLS LAST,
-               cs.total_ratings DESC,
-               cs.game_count DESC,
-               c.id
+      ORDER BY ${sortOrder}
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
 
@@ -185,7 +202,7 @@ export async function getCreatorByName(name: string): Promise<CreatorWithGames |
 }
 
 export async function getTotalCreatorCount(
-  filter: LeaderboardFilter = 'qualified'
+  filter: LeaderboardFilter = 'all'
 ): Promise<number> {
   const filterCondition = getFilterCondition(filter);
   const client = await getConnection();
