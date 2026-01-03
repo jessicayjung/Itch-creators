@@ -404,6 +404,17 @@ Each module should have tests for:
 
 Parsers test against fixtures only—never hit live sites in tests.
 
+### Keeping Tests Updated
+
+**IMPORTANT:** When modifying code, always update corresponding tests:
+
+1. **Model changes** — Update test files that create model instances (e.g., `Game`, `Creator`)
+2. **Function signature changes** — Update mocks and assertions in test files
+3. **Database schema changes** — Update mock data dictionaries and execute counts
+4. **New functionality** — Add new test cases for new features
+
+Tests should always pass before pushing to main. Run `pytest tests/` locally to verify.
+
 ---
 
 ## What NOT To Build

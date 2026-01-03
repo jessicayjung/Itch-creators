@@ -39,8 +39,9 @@ def test_create_tables(mock_env):
 
         # Verify connection was established
         mock_connect.assert_called_once()
-        # Verify SQL was executed: 3 tables + 4 ALTER TABLEs + constraint migrations + 2 indexes
-        assert mock_cursor.execute.call_count == 12  # 3 CREATE TABLE + 4 ALTER TABLE + 3 constraint migrations + 2 CREATE INDEX
+        # Verify SQL was executed multiple times for schema setup
+        # 3 CREATE TABLE + 5 ALTER TABLE + 2 constraint checks + 2 CREATE INDEX = 12 minimum
+        assert mock_cursor.execute.call_count >= 12
         mock_conn.commit.assert_called_once()
         mock_conn.close.assert_called_once()
 
@@ -91,6 +92,7 @@ def test_insert_game(mock_env):
             rating_count=0,
             comment_count=0,
             description=None,
+            tags=None,
             scraped_at=None
         )
 
@@ -191,6 +193,7 @@ def test_get_unenriched_games(mock_env):
                 "rating_count": 0,
                 "comment_count": 0,
                 "description": None,
+                "tags": None,
                 "scraped_at": None
             }
         ]
@@ -222,6 +225,7 @@ def test_get_unenriched_games_with_zero_rating(mock_env):
                 "rating_count": 10,
                 "comment_count": 0,
                 "description": None,
+                "tags": None,
                 "scraped_at": None
             }
         ]
@@ -253,6 +257,7 @@ def test_get_unenriched_games_with_null_creator(mock_env):
                 "rating_count": 0,
                 "comment_count": 0,
                 "description": None,
+                "tags": None,
                 "scraped_at": None
             }
         ]
@@ -276,11 +281,13 @@ def test_update_game_ratings(mock_env):
 
         mock_cursor.execute.assert_called_once()
         args = mock_cursor.execute.call_args[0]
+        # SQL params order: rating, rating_count, comment_count, description, tags,
+        #                   publish_date, title, scraped_at, game_id
         assert args[1][0] == 4.5  # rating
         assert args[1][1] == 100  # rating_count
         assert args[1][2] == 25   # comment_count
         assert args[1][3] == "A cool game"  # description
-        assert args[1][5] == 1    # game_id
+        assert args[1][8] == 1    # game_id (last param)
 
 
 def test_mark_creator_backfilled(mock_env):

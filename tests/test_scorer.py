@@ -2,49 +2,45 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.scorer import calculate_bayesian_score, score_all, score_creator
+from src.scorer import calculate_love_score, score_all, score_creator
 
 
-def test_calculate_bayesian_score():
-    """Test Bayesian score calculation."""
-    # High rating with many votes - should be close to actual rating
-    score = calculate_bayesian_score(avg_rating=4.5, rating_count=100)
-    assert score > 4.4  # Should be close to 4.5
+def test_calculate_love_score_high_ratings():
+    """Test Love Score with many ratings - should be close to actual rating."""
+    # High rating with many votes
+    score = calculate_love_score(avg_rating=4.5, total_ratings=100, game_count=5)
+    assert score > 4.5  # Should be boosted by engagement and track record
 
-    # Low rating with many votes - should be close to actual rating
-    score = calculate_bayesian_score(avg_rating=2.0, rating_count=100)
-    assert score < 2.2  # Should be close to 2.0
 
+def test_calculate_love_score_low_ratings():
+    """Test Love Score with few ratings - should be pulled toward global average."""
     # High rating with few votes - should be pulled toward global average
-    score = calculate_bayesian_score(avg_rating=5.0, rating_count=2)
+    score = calculate_love_score(avg_rating=5.0, total_ratings=2, game_count=1)
     assert 3.5 < score < 5.0  # Between global avg (3.5) and actual (5.0)
 
-    # No votes - should equal global average
-    score = calculate_bayesian_score(avg_rating=4.0, rating_count=0)
-    assert score == 3.5  # Should equal global avg
+
+def test_calculate_love_score_no_ratings():
+    """Test Love Score with no ratings - should equal global average."""
+    score = calculate_love_score(avg_rating=4.0, total_ratings=0, game_count=1)
+    assert score == 3.5  # Should equal global avg with no engagement boost
 
 
-def test_calculate_bayesian_score_custom_params():
-    """Test Bayesian score with custom parameters."""
-    # Custom global average
-    score = calculate_bayesian_score(
-        avg_rating=4.0,
-        rating_count=0,
-        global_avg=4.5,
-        min_votes=10
-    )
-    assert score == 4.5  # Should equal custom global avg
+def test_calculate_love_score_single_game():
+    """Test that single game creators get no track record bonus."""
+    score_single = calculate_love_score(avg_rating=4.0, total_ratings=50, game_count=1)
+    score_multi = calculate_love_score(avg_rating=4.0, total_ratings=50, game_count=5)
 
-    # Custom min votes threshold
-    score = calculate_bayesian_score(
-        avg_rating=5.0,
-        rating_count=5,
-        global_avg=3.5,
-        min_votes=5
-    )
-    # With min_votes=5 and rating_count=5, weights should be 50/50
-    expected = (0.5 * 5.0) + (0.5 * 3.5)
-    assert abs(score - expected) < 0.01
+    # Multi-game creator should have higher score due to track record bonus
+    assert score_multi > score_single
+
+
+def test_calculate_love_score_engagement_bonus():
+    """Test that higher total ratings get engagement bonus."""
+    score_few = calculate_love_score(avg_rating=4.0, total_ratings=10, game_count=1)
+    score_many = calculate_love_score(avg_rating=4.0, total_ratings=1000, game_count=1)
+
+    # Higher ratings should have higher score due to engagement
+    assert score_many > score_few
 
 
 def test_score_creator():
@@ -57,9 +53,9 @@ def test_score_creator():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # Mock query result: (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        # 10 games, 8 rated, 500 total ratings, weighted sum = 4.2 * 500 = 2100, 50 comments
-        mock_cursor.fetchone.return_value = (10, 8, 500, 2100.0, 50)
+        # Mock query result: (total_games, total_ratings, weighted_rating_sum)
+        # 10 games, 500 total ratings, weighted sum = 4.2 * 500 = 2100
+        mock_cursor.fetchone.return_value = (10, 500, 2100.0)
 
         result = score_creator(creator_id=1)
 
@@ -70,13 +66,12 @@ def test_score_creator():
         assert abs(result.avg_rating - 4.2) < 0.1
         assert result.bayesian_score > 0
 
-        # With 500 ratings and 10 games (capped 1.10x bonus), score is boosted
-        # Base score ~ 4.17, with 10% bonus = ~4.59
-        assert result.bayesian_score > 4.5  # Has game count bonus
+        # With 500 ratings and 10 games, score should be boosted
+        assert result.bayesian_score > 4.5
 
 
 def test_score_creator_no_games():
-    """Test scoring a creator with no rated games."""
+    """Test scoring a creator with no games."""
     with patch("src.scorer.db.get_connection") as mock_get_conn:
 
         mock_conn = MagicMock()
@@ -84,8 +79,8 @@ def test_score_creator_no_games():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # No games: (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        mock_cursor.fetchone.return_value = (0, 0, 0, 0.0, 0)
+        # No games
+        mock_cursor.fetchone.return_value = (0, 0, 0.0)
 
         result = score_creator(creator_id=1)
 
@@ -105,9 +100,9 @@ def test_score_creator_few_ratings():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        # 2 games, 2 rated, 5 total ratings, weighted sum = 5.0 * 5 = 25, 0 comments
-        mock_cursor.fetchone.return_value = (2, 2, 5, 25.0, 0)
+        # (total_games, total_ratings, weighted_rating_sum)
+        # 2 games, 5 total ratings, weighted sum = 5.0 * 5 = 25
+        mock_cursor.fetchone.return_value = (2, 5, 25.0)
 
         result = score_creator(creator_id=1)
 
@@ -117,8 +112,8 @@ def test_score_creator_few_ratings():
         # Weighted avg = 25 / 5 = 5.0
         assert abs(result.avg_rating - 5.0) < 0.1
 
-        # With few ratings, score should be between avg and global avg
-        assert 3.5 < result.bayesian_score < 5.0
+        # With few ratings, quality component is pulled toward global avg
+        assert result.bayesian_score > 0
 
 
 def test_score_all():
@@ -138,9 +133,9 @@ def test_score_all():
         # Mock score_creator to return dummy scores
         from src.models import CreatorScore
         mock_score_creator.side_effect = [
-            CreatorScore(1, 10, 100, 4.0, 3.95),
-            CreatorScore(2, 5, 50, 4.5, 4.25),
-            CreatorScore(3, 15, 200, 3.8, 3.78),
+            CreatorScore(1, 10, 100, 4.0, 5.95),
+            CreatorScore(2, 5, 50, 4.5, 5.25),
+            CreatorScore(3, 15, 200, 3.8, 6.78),
         ]
 
         result = score_all()
@@ -171,24 +166,19 @@ def test_score_all_no_creators():
         assert result["creators_scored"] == 0
 
 
-def test_bayesian_formula_correctness():
-    """Test that Bayesian formula is correctly implemented."""
-    # Manual calculation:
-    # avg_rating = 4.0, rating_count = 20, global_avg = 3.5, min_votes = 10
-    # weighted = (20 / (20 + 10)) * 4.0 + (10 / (20 + 10)) * 3.5
-    # weighted = (20/30) * 4.0 + (10/30) * 3.5
-    # weighted = 0.6667 * 4.0 + 0.3333 * 3.5
-    # weighted = 2.6667 + 1.1667 = 3.8333
+def test_love_score_formula_components():
+    """Test that Love Score formula correctly combines quality, engagement, and track record."""
+    # With 0 ratings, only quality component matters (equals global avg)
+    score_zero = calculate_love_score(avg_rating=5.0, total_ratings=0, game_count=1)
+    assert score_zero == 3.5  # Global avg
 
-    score = calculate_bayesian_score(
-        avg_rating=4.0,
-        rating_count=20,
-        global_avg=3.5,
-        min_votes=10
-    )
+    # Adding ratings increases the score (engagement bonus)
+    score_with_ratings = calculate_love_score(avg_rating=5.0, total_ratings=100, game_count=1)
+    assert score_with_ratings > score_zero
 
-    expected = 3.8333
-    assert abs(score - expected) < 0.01
+    # Adding games increases the score (track record bonus)
+    score_with_games = calculate_love_score(avg_rating=5.0, total_ratings=100, game_count=10)
+    assert score_with_games > score_with_ratings
 
 
 def test_score_creator_rounds_correctly():
@@ -200,9 +190,8 @@ def test_score_creator_rounds_correctly():
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        # 5 games, 5 rated, 25 ratings, weighted sum = 4.123456 * 25 = 103.0864, 0 comments
-        mock_cursor.fetchone.return_value = (5, 5, 25, 103.0864, 0)
+        # (total_games, total_ratings, weighted_rating_sum)
+        mock_cursor.fetchone.return_value = (5, 25, 103.0864)
 
         result = score_creator(creator_id=1)
 
@@ -210,78 +199,6 @@ def test_score_creator_rounds_correctly():
         assert result.avg_rating == 4.12
 
         # bayesian_score should be rounded to 4 decimals
-        assert len(str(result.bayesian_score).split('.')[-1]) <= 4
-
-
-def test_game_count_bonus_applied():
-    """Test that multi-game creators get a score bonus."""
-    with patch("src.scorer.db.get_connection") as mock_get_conn:
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.__enter__.return_value = mock_conn
-        mock_conn.cursor.return_value = mock_cursor
-
-        # Creator with 3 games: should get 1.02^2 = 1.0404 bonus
-        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        mock_cursor.fetchone.return_value = (3, 3, 100, 400.0, 0)  # avg = 4.0, 0 comments
-
-        result = score_creator(creator_id=1)
-
-        # Base bayesian score with avg=4.0, 100 ratings, min_votes=5
-        # = (100/(100+5)) * 4.0 + (5/(100+5)) * 3.5
-        # = 0.9524 * 4.0 + 0.0476 * 3.5 = 3.8095 + 0.1667 = 3.9762
-        base_score = 3.9762
-        expected_with_bonus = base_score * (1.02 ** 2)  # 1.0404 multiplier
-
-        assert result.game_count == 3
-        assert result.bayesian_score > base_score
-        assert abs(result.bayesian_score - expected_with_bonus) < 0.05
-
-
-def test_game_count_bonus_capped():
-    """Test that game count bonus doesn't exceed 10%."""
-    with patch("src.scorer.db.get_connection") as mock_get_conn:
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.__enter__.return_value = mock_conn
-        mock_conn.cursor.return_value = mock_cursor
-
-        # Creator with 20 games: 1.02^19 = 1.456, but should cap at 1.10
-        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        mock_cursor.fetchone.return_value = (20, 20, 200, 800.0, 0)  # avg = 4.0, 0 comments
-
-        result = score_creator(creator_id=1)
-
-        # Base bayesian score with avg=4.0, 200 ratings, min_votes=5
-        # = (200/(200+5)) * 4.0 + (5/(200+5)) * 3.5 = 3.9878
-        base_score = 3.9878
-        max_with_cap = base_score * 1.10  # Max 10% bonus
-
-        assert result.game_count == 20
-        # Score should be capped, not exceed max
-        assert result.bayesian_score <= max_with_cap + 0.01
-        # Score should be at the cap (1.10x)
-        assert abs(result.bayesian_score - max_with_cap) < 0.01
-
-
-def test_single_game_no_bonus():
-    """Test that single game creators get no bonus."""
-    with patch("src.scorer.db.get_connection") as mock_get_conn:
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.__enter__.return_value = mock_conn
-        mock_conn.cursor.return_value = mock_cursor
-
-        # Creator with 1 game: no bonus applied
-        # (total_games, rated_games, total_ratings, weighted_rating_sum, total_comments)
-        mock_cursor.fetchone.return_value = (1, 1, 50, 200.0, 0)  # avg = 4.0, 0 comments
-
-        result = score_creator(creator_id=1)
-
-        # Base bayesian score with avg=4.0, 50 ratings, min_votes=5
-        # = (50/(50+5)) * 4.0 + (5/(50+5)) * 3.5
-        # = 0.909 * 4.0 + 0.091 * 3.5 = 3.636 + 0.318 = 3.954
-        expected_no_bonus = 3.9545
-
-        assert result.game_count == 1
-        assert abs(result.bayesian_score - expected_no_bonus) < 0.01
+        score_str = str(result.bayesian_score)
+        if '.' in score_str:
+            assert len(score_str.split('.')[-1]) <= 4

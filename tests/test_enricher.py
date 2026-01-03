@@ -22,6 +22,7 @@ def sample_game():
         rating_count=0,
         comment_count=0,
         description=None,
+        tags=None,
         scraped_at=None
     )
 
@@ -89,9 +90,9 @@ def test_enrich_game_no_ratings(sample_game, sample_game_no_ratings_html):
 def test_enrich_all():
     """Test enriching all unenriched games."""
     game1 = Game(1, "game1", "Game 1", "dev1", "https://dev1.itch.io/game1",
-                 date(2024, 1, 1), None, 0, 0, None, None)
+                 date(2024, 1, 1), None, 0, 0, None, None, None)
     game2 = Game(2, "game2", "Game 2", "dev2", "https://dev2.itch.io/game2",
-                 date(2024, 1, 2), None, 0, 0, None, None)
+                 date(2024, 1, 2), None, 0, 0, None, None, None)
 
     with patch("src.enricher.db.get_unenriched_games") as mock_get_games, \
          patch("src.enricher.enrich_game") as mock_enrich_game:
@@ -111,11 +112,11 @@ def test_enrich_all():
 def test_enrich_all_with_errors():
     """Test enriching with some errors."""
     game1 = Game(1, "game1", "Game 1", "dev1", "https://dev1.itch.io/game1",
-                 date(2024, 1, 1), None, 0, 0, None, None)
+                 date(2024, 1, 1), None, 0, 0, None, None, None)
     game2 = Game(2, "game2", "Game 2", "dev2", "https://dev2.itch.io/game2",
-                 date(2024, 1, 2), None, 0, 0, None, None)
+                 date(2024, 1, 2), None, 0, 0, None, None, None)
     game3 = Game(3, "game3", "Game 3", "dev3", "https://dev3.itch.io/game3",
-                 date(2024, 1, 3), None, 0, 0, None, None)
+                 date(2024, 1, 3), None, 0, 0, None, None, None)
 
     with patch("src.enricher.db.get_unenriched_games") as mock_get_games, \
          patch("src.enricher.enrich_game") as mock_enrich_game:

@@ -73,6 +73,8 @@ Two separate codebases sharing a database:
 
 **When uncertain, stop and ask.** If requirements are ambiguous or a task seems to conflict with the plan, clarify before proceeding.
 
+**Always update tests when changing features.** When modifying code (models, functions, database schema, etc.), immediately update the corresponding test files to match. Tests should always pass before pushing to main. Check `tests/` directory for affected test files.
+
 ## Code Conventions
 
 ### Python (Scraper)

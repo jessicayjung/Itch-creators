@@ -60,16 +60,16 @@ def test_poll_feed_empty():
 def test_get_new_releases(sample_feed_xml):
     """Test getting new releases from multiple feeds."""
     with patch("src.feed_poller.fetch") as mock_fetch:
-        # Return same feed for both URLs
+        # Return same feed for all URLs
         mock_fetch.return_value = sample_feed_xml
 
         result = get_new_releases()
 
-        # Should have 3 entries (deduplicated)
+        # Should have 3 entries (deduplicated across all feeds)
         assert len(result) == 3
 
-        # Check that fetch was called twice (for both default feeds)
-        assert mock_fetch.call_count == 2
+        # Check that fetch was called for all default feeds (26 feeds)
+        assert mock_fetch.call_count == 26
 
 
 def test_get_new_releases_deduplication(sample_feed_xml):
