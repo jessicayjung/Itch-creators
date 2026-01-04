@@ -56,7 +56,8 @@ def test_fetch_rate_limiting():
 def test_fetch_429_retry():
     """Test retry logic on rate limiting (429)."""
     with patch("src.http_client.httpx.get") as mock_get, \
-         patch("src.http_client.time.sleep") as mock_sleep:
+         patch("src.http_client.time.sleep") as mock_sleep, \
+         patch("src.http_client.random.uniform", return_value=0.0):
 
         # First attempt returns 429, second succeeds
         mock_response_429 = MagicMock()
@@ -79,7 +80,8 @@ def test_fetch_429_retry():
 def test_fetch_500_retry():
     """Test retry logic on server error (500)."""
     with patch("src.http_client.httpx.get") as mock_get, \
-         patch("src.http_client.time.sleep") as mock_sleep:
+         patch("src.http_client.time.sleep") as mock_sleep, \
+         patch("src.http_client.random.uniform", return_value=0.0):
 
         # First attempt returns 500, second succeeds
         mock_response_500 = MagicMock()
@@ -101,7 +103,8 @@ def test_fetch_500_retry():
 def test_fetch_max_retries_exceeded():
     """Test that fetch fails after max retries."""
     with patch("src.http_client.httpx.get") as mock_get, \
-         patch("src.http_client.time.sleep"):
+         patch("src.http_client.time.sleep"), \
+         patch("src.http_client.random.uniform", return_value=0.0):
 
         # All attempts return 429
         mock_response = MagicMock()
@@ -118,7 +121,8 @@ def test_fetch_max_retries_exceeded():
 def test_fetch_timeout_retry():
     """Test retry on timeout."""
     with patch("src.http_client.httpx.get") as mock_get, \
-         patch("src.http_client.time.sleep"):
+         patch("src.http_client.time.sleep"), \
+         patch("src.http_client.random.uniform", return_value=0.0):
 
         # First attempt times out, second succeeds
         mock_response = MagicMock()
@@ -154,7 +158,8 @@ def test_fetch_non_retryable_error():
 def test_exponential_backoff():
     """Test that exponential backoff increases correctly."""
     with patch("src.http_client.httpx.get") as mock_get, \
-         patch("src.http_client.time.sleep") as mock_sleep:
+         patch("src.http_client.time.sleep") as mock_sleep, \
+         patch("src.http_client.random.uniform", return_value=0.0):
 
         # All attempts return 429
         mock_response = MagicMock()
@@ -167,6 +172,28 @@ def test_exponential_backoff():
         # Check that sleep was called with increasing durations
         sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
         assert len(sleep_calls) >= 2
-        # First backoff should be 2s, second 4s, third 8s
-        assert sleep_calls[0] == 2  # 2^0 * 2
-        assert sleep_calls[1] == 4  # 2^1 * 2
+        # First backoff should be at least 2s, second at least 4s
+        assert sleep_calls[0] >= 2  # 2^0 * 2
+        assert sleep_calls[1] >= 4  # 2^1 * 2
+
+
+def test_retry_after_respected():
+    """Test that Retry-After header increases backoff."""
+    with patch("src.http_client.httpx.get") as mock_get, \
+         patch("src.http_client.time.sleep") as mock_sleep, \
+         patch("src.http_client.random.uniform", return_value=0.0):
+
+        mock_response_429 = MagicMock()
+        mock_response_429.status_code = 429
+        mock_response_429.headers = {"Retry-After": "10"}
+
+        mock_response_200 = MagicMock()
+        mock_response_200.status_code = 200
+        mock_response_200.text = "<html>success</html>"
+
+        mock_get.side_effect = [mock_response_429, mock_response_200]
+
+        result = fetch("https://example.com")
+
+        assert result == "<html>success</html>"
+        assert mock_sleep.call_args_list[0][0][0] >= 10

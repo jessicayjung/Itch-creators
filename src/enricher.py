@@ -29,6 +29,7 @@ def enrich_game(game: Game) -> bool:
     # Detect if ratings are hidden or parse failed
     # Case 1: No rating and no rating count = truly hidden/disabled ratings
     # Case 2: No rating but has rating count = parse failure, should retry
+    parse_failed = rating_data["rating"] is None and rating_data["rating_count"] > 0
     ratings_hidden = rating_data["rating"] is None
 
     # Update in database
@@ -43,6 +44,9 @@ def enrich_game(game: Game) -> bool:
         tags=rating_data["tags"],
         ratings_hidden=ratings_hidden
     )
+
+    if parse_failed:
+        raise ValueError("Rating parse failed (rating_count present, rating missing)")
 
     return True
 
@@ -71,6 +75,8 @@ def enrich_all(limit: int | None = None) -> dict[str, int]:
         except Exception as e:
             stats["errors"] += 1
             log_error_with_context(logger, "Enrich", f"{game.title} ({game.url})", e)
+            # Mark failed games with cooldown to prevent infinite retry loops
+            db.mark_game_failed(game.id)
 
     return stats
 
@@ -101,5 +107,7 @@ def re_enrich_stale(days_old: int = 7, limit: int = 500) -> dict[str, int]:
         except Exception as e:
             stats["errors"] += 1
             log_error_with_context(logger, "Re-enrich", f"{game.title} ({game.url})", e)
+            # Mark failed games with cooldown to prevent infinite retry loops
+            db.mark_game_failed(game.id)
 
     return stats

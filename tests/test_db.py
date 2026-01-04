@@ -103,6 +103,36 @@ def test_insert_game(mock_env):
         mock_conn.commit.assert_called_once()
 
 
+def test_insert_game_missing_creator(mock_env):
+    """Test inserting a game with missing creator returns None."""
+    with patch("src.db.psycopg2.connect") as mock_connect:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        # Creator lookup returns None
+        mock_cursor.fetchone.return_value = None
+
+        game = Game(
+            id=None,
+            itch_id="orphan-game",
+            title="Orphan Game",
+            creator_name="missingdev",
+            url="https://missingdev.itch.io/orphan-game",
+            publish_date=date(2024, 1, 1),
+            rating=None,
+            rating_count=0,
+            comment_count=0,
+            description=None,
+            tags=None,
+            scraped_at=None
+        )
+
+        result = insert_game(game)
+
+        assert result is None
+        assert mock_cursor.execute.call_count == 1  # creator lookup only
 def test_get_creator_by_name(mock_env):
     """Test fetching a creator by name."""
     with patch("src.db.psycopg2.connect") as mock_connect:
@@ -267,6 +297,42 @@ def test_get_unenriched_games_with_null_creator(mock_env):
         assert len(result) == 1
         assert result[0].title == "Orphaned Game"
         assert result[0].creator_name == "unknown"  # NULL mapped to "unknown"
+
+
+def test_get_unenriched_games_includes_missing_metadata(mock_env):
+    """Test that query includes missing metadata criteria."""
+    with patch("src.db.psycopg2.connect") as mock_connect:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        mock_cursor.fetchall.return_value = []
+
+        get_unenriched_games()
+
+        args = mock_cursor.execute.call_args[0]
+        query = args[0]
+        assert "g.description IS NULL" in query
+        assert "g.publish_date IS NULL" in query
+        assert "g.title IS NULL" in query
+
+
+def test_mark_game_failed_sets_cooldown(mock_env):
+    """Test marking a game as failed uses a cooldown interval."""
+    with patch("src.db.psycopg2.connect") as mock_connect:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        from src.db import mark_game_failed
+
+        mark_game_failed(42, cooldown_days=5)
+
+        args = mock_cursor.execute.call_args[0]
+        assert "make_interval" in args[0]
+        assert args[1] == (5, 42)
 
 
 def test_update_game_ratings(mock_env):

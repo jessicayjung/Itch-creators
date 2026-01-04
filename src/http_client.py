@@ -1,3 +1,4 @@
+import random
 import time
 from typing import Optional
 
@@ -6,7 +7,7 @@ import httpx
 
 # Track last request time for rate limiting
 _last_request_time: Optional[float] = None
-_min_delay_seconds = 2.0
+_min_delay_seconds = 1.0
 _user_agent = "itch-creators-scraper/1.0 (Educational project for ranking game creators)"
 
 
@@ -46,13 +47,13 @@ def fetch(url: str, max_retries: int = 3) -> str:
 
             # Rate limited - exponential backoff
             if response.status_code == 429:
-                wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s
+                wait_time = _get_backoff_time(response, attempt)
                 time.sleep(wait_time)
                 continue
 
             # Server error - retry with backoff
             if 500 <= response.status_code < 600:
-                wait_time = (2 ** attempt) * 2
+                wait_time = _get_backoff_time(response, attempt)
                 time.sleep(wait_time)
                 continue
 
@@ -65,17 +66,39 @@ def fetch(url: str, max_retries: int = 3) -> str:
 
         except httpx.TimeoutException:
             if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) * 2
+                wait_time = _get_backoff_time(None, attempt)
                 time.sleep(wait_time)
                 continue
             raise
 
         except httpx.HTTPError as e:
             if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) * 2
+                wait_time = _get_backoff_time(None, attempt)
                 time.sleep(wait_time)
                 continue
             raise
 
     # If we get here, all retries failed
     raise httpx.HTTPError(f"Failed to fetch {url} after {max_retries} attempts")
+
+
+def _get_backoff_time(response: httpx.Response | None, attempt: int) -> float:
+    """Calculate backoff time with optional Retry-After and jitter."""
+    base_wait = (2 ** attempt) * 2
+    retry_after = _parse_retry_after(response) if response else None
+    wait_time = max(base_wait, retry_after) if retry_after is not None else base_wait
+    jitter = random.uniform(0.0, 1.0)
+    return wait_time + jitter
+
+
+def _parse_retry_after(response: httpx.Response | None) -> int | None:
+    """Parse Retry-After header if present (seconds)."""
+    if response is None:
+        return None
+    header = response.headers.get("Retry-After")
+    if not header or not isinstance(header, str):
+        return None
+    try:
+        return int(header)
+    except ValueError:
+        return None

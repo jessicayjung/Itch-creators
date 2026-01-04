@@ -140,7 +140,7 @@ def create_tables() -> None:
                 game_count INTEGER DEFAULT 0,
                 total_ratings INTEGER DEFAULT 0,
                 avg_rating DECIMAL(3,2),
-                bayesian_score DECIMAL(5,4),
+                bayesian_score DECIMAL(7,4),
                 calculated_at TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -193,6 +193,9 @@ def insert_game(game: Game) -> int:
         cursor.execute("SELECT id FROM creators WHERE name = %s", (game.creator_name,))
         creator_result = cursor.fetchone()
         creator_id = creator_result[0] if creator_result else None
+        if creator_id is None:
+            cursor.close()
+            return None
 
         cursor.execute(
             """
@@ -268,25 +271,40 @@ def get_unbackfilled_creators() -> list[Creator]:
         ]
 
 
-def get_unenriched_games(limit: int | None = None) -> list[Game]:
+def get_unenriched_games(
+    limit: int | None = None,
+    backfill_missing_metadata: bool = True
+) -> list[Game]:
     """Fetch games that haven't been scraped for ratings or need re-enrichment.
 
     Args:
         limit: Maximum number of games to return. None for unlimited.
+        backfill_missing_metadata: Include games missing required metadata fields.
     """
     with get_connection() as conn:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        query = """
+        where_clauses = [
+            "(g.scraped_at IS NULL AND (g.ratings_hidden = FALSE OR g.ratings_hidden IS NULL OR g.ratings_hidden_until IS NULL OR g.ratings_hidden_until < NOW()))",
+            "(g.ratings_hidden = TRUE AND g.ratings_hidden_until < NOW())",
+        ]
+        if backfill_missing_metadata:
+            where_clauses.append(
+                "(g.title IS NULL OR g.title = '' OR g.publish_date IS NULL OR g.description IS NULL) "
+                "AND (g.ratings_hidden = FALSE OR g.ratings_hidden IS NULL OR g.ratings_hidden_until IS NULL OR g.ratings_hidden_until < NOW())"
+            )
+
+        query = f"""
             SELECT g.*, c.name as creator_name
             FROM games g
             LEFT JOIN creators c ON g.creator_id = c.id
-            WHERE g.scraped_at IS NULL
-               OR (g.ratings_hidden = TRUE AND g.ratings_hidden_until < NOW())
+            WHERE {" OR ".join(f"({clause})" for clause in where_clauses)}
             ORDER BY g.id
         """
-        if limit:
-            query += f" LIMIT {limit}"
-        cursor.execute(query)
+        params: list[object] = []
+        if limit is not None:
+            query += " LIMIT %s"
+            params.append(limit)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         cursor.close()
 
@@ -318,7 +336,7 @@ def get_stale_games(days_old: int = 7, limit: int = 500) -> list[Game]:
             FROM games g
             LEFT JOIN creators c ON g.creator_id = c.id
             WHERE g.scraped_at IS NOT NULL
-              AND g.scraped_at < NOW() - INTERVAL '%s days'
+              AND g.scraped_at < NOW() - make_interval(days => %s)
               AND g.ratings_hidden = FALSE
             ORDER BY g.scraped_at ASC
             LIMIT %s
@@ -361,7 +379,7 @@ def update_game_ratings(
     Args:
         game_id: ID of the game to update
         rating: The game's rating (None if not available)
-        rating_count: Number of ratings
+        rating_count: Number of ratings (stored even if ratings are hidden)
         comment_count: Number of comments on the game
         description: Short description/summary of the game
         publish_date: When the game was published (only updates if currently NULL)
@@ -378,12 +396,12 @@ def update_game_ratings(
                 """
                 UPDATE games
                 SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + INTERVAL '7 days',
-                    comment_count = %s, description = %s, tags = %s,
+                    rating_count = %s, comment_count = %s, description = %s, tags = %s,
                     publish_date = COALESCE(publish_date, %s),
                     title = CASE WHEN title = '' OR title IS NULL THEN %s ELSE title END
                 WHERE id = %s
                 """,
-                (comment_count, description, tags, publish_date.date() if publish_date else None, title, game_id)
+                (rating_count, comment_count, description, tags, publish_date.date() if publish_date else None, title, game_id)
             )
         else:
             cursor.execute(
@@ -398,6 +416,28 @@ def update_game_ratings(
                 (rating, rating_count, comment_count, description, tags,
                  publish_date.date() if publish_date else None, title, datetime.now(), game_id)
             )
+        cursor.close()
+
+
+def mark_game_failed(game_id: int, cooldown_days: int = 7) -> None:
+    """Mark a game as failed with a cooldown period before retry.
+
+    Uses the ratings_hidden mechanism to set a cooldown, preventing infinite retry loops.
+
+    Args:
+        game_id: ID of the game that failed
+        cooldown_days: Days to wait before retrying (default: 7)
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE games
+            SET ratings_hidden = TRUE, ratings_hidden_until = NOW() + make_interval(days => %s)
+            WHERE id = %s
+            """,
+            (cooldown_days, game_id)
+        )
         cursor.close()
 
 

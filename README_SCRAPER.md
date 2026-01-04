@@ -44,6 +44,7 @@ Fetch rating information for games:
 ```bash
 python -m src enrich
 ```
+This step also backfills missing game metadata (title, publish date, description).
 
 ### Calculate scores
 Recalculate creator rankings using Bayesian averaging:
@@ -56,6 +57,7 @@ Execute all steps in sequence:
 ```bash
 python -m src run
 ```
+This includes discovery and re-enrichment steps.
 
 ## Development
 

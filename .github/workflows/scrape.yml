@@ -2,8 +2,9 @@ name: Daily Scrape
 
 on:
   schedule:
-    # Run at 6:00 AM UTC every day
-    - cron: '0 6 * * *'
+    # Run 2x daily to clear backlog faster
+    - cron: '0 6 * * *'   # 6 AM UTC
+    - cron: '0 18 * * *'  # 6 PM UTC
   workflow_dispatch: # Allow manual triggering
 
 env:
@@ -43,7 +44,7 @@ jobs:
         run: python -m src.main backfill
 
       - name: Enrich game data (ratings, descriptions)
-        run: python -m src.main enrich --limit 2000
+        run: python -m src.main enrich --limit 4000
 
       - name: Re-enrich stale games (update ratings for games older than 7 days)
         run: python -m src.main re-enrich --days 7 --limit 500

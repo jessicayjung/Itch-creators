@@ -25,7 +25,7 @@ Two separate codebases sharing a database:
 └───────────────────┘                 └───────────────────┘
 ```
 
-**Python Scraper** — Runs on a schedule via GitHub Actions, polls RSS feeds, scrapes creator profiles and game pages, writes to Postgres. Lives in root directory with `.github/workflows/scraper.yml`.
+**Python Scraper** — Runs on a schedule via GitHub Actions, polls RSS feeds, scrapes creator profiles and game pages, writes to Postgres. Lives in root directory with `.github/workflows/scrape.yml`.
 
 **Next.js Frontend** — Reads from Postgres, displays ranked creators. Deployed on Vercel. Lives in `/web` directory.
 

@@ -66,7 +66,7 @@ CREATE TABLE creator_scores (
     game_count INTEGER DEFAULT 0,
     total_ratings INTEGER DEFAULT 0,
     avg_rating DECIMAL(3,2),
-    bayesian_score DECIMAL(5,4),
+    bayesian_score DECIMAL(7,4),
     calculated_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -127,7 +127,7 @@ Build in this order. Complete each with tests before proceeding.
 - `insert_game(game)` → returns id
 - `get_creator_by_name(name)` → Creator or None
 - `get_unbackfilled_creators()` → list of Creators
-- `get_unenriched_games()` → list of Games
+- `get_unenriched_games()` → list of Games (includes missing metadata backfill)
 - `update_game_ratings(game_id, rating, rating_count)`
 - `mark_creator_backfilled(creator_id)`
 - `upsert_creator_score(score)`
@@ -248,7 +248,7 @@ weighted_score = (rating_count / (rating_count + min_votes)) * avg_rating
 - `enrich --limit N` — fetch ratings for unenriched games (optional limit)
 - `re-enrich --days N --limit N` — re-enrich stale games older than N days
 - `score` — recalculate all creator scores
-- `run` — execute full pipeline (poll → backfill → enrich → score)
+- `run` — execute full pipeline (poll → discover → backfill → enrich → re-enrich → score)
 
 **Uses:** all modules
 

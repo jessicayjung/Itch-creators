@@ -38,7 +38,7 @@ export async function closePool(): Promise<void> {
 
 // Build filter condition for leaderboard queries
 function getFilterCondition(filter: LeaderboardFilter): string {
-  switch (filter) {
+  switch (normalizeFilter(filter)) {
     case 'multi-game':
       return 'AND cs.game_count >= 2';
     case 'well-rated':
@@ -60,7 +60,7 @@ function getFilterCondition(filter: LeaderboardFilter): string {
 // Build ORDER BY clause based on sort option
 // Weights higher game count over perfect ratings with fewer games
 function getSortOrder(sort: LeaderboardSort): string {
-  switch (sort) {
+  switch (normalizeSort(sort)) {
     case 'games':
       return `cs.game_count DESC, cs.bayesian_score DESC NULLS LAST, cs.total_ratings DESC, c.id`;
     case 'ratings':
@@ -80,8 +80,10 @@ export async function getRankedCreators(
   filter: LeaderboardFilter = 'all',
   sort: LeaderboardSort = 'score'
 ): Promise<RankedCreator[]> {
-  const filterCondition = getFilterCondition(filter);
-  const sortOrder = getSortOrder(sort);
+  const normalizedFilter = normalizeFilter(filter);
+  const normalizedSort = normalizeSort(sort);
+  const filterCondition = getFilterCondition(normalizedFilter);
+  const sortOrder = getSortOrder(normalizedSort);
   const client = await getConnection();
 
   try {
@@ -210,7 +212,7 @@ export async function getCreatorByName(name: string): Promise<CreatorWithGames |
 export async function getTotalCreatorCount(
   filter: LeaderboardFilter = 'all'
 ): Promise<number> {
-  const filterCondition = getFilterCondition(filter);
+  const filterCondition = getFilterCondition(normalizeFilter(filter));
   const client = await getConnection();
 
   try {
@@ -225,4 +227,14 @@ export async function getTotalCreatorCount(
   } finally {
     client.release();
   }
+}
+
+function normalizeFilter(filter: LeaderboardFilter): LeaderboardFilter {
+  const validFilters: LeaderboardFilter[] = ['all', 'multi-game', 'well-rated', 'rising'];
+  return validFilters.includes(filter) ? filter : 'all';
+}
+
+function normalizeSort(sort: LeaderboardSort): LeaderboardSort {
+  const validSorts: LeaderboardSort[] = ['score', 'games', 'ratings', 'avg'];
+  return validSorts.includes(sort) ? sort : 'score';
 }

@@ -27,8 +27,8 @@ const SORTS: { value: LeaderboardSort; label: string }[] = [
 
 export default async function Home({ searchParams }: PageProps) {
   const params = await searchParams;
-  const filter = (params.filter as LeaderboardFilter) || 'all';
-  const sort = (params.sort as LeaderboardSort) || 'score';
+  const filter = FILTERS.find((f) => f.value === params.filter)?.value || 'all';
+  const sort = SORTS.find((s) => s.value === params.sort)?.value || 'score';
   const page = Math.max(1, parseInt(params.page || '1', 10));
   const offset = (page - 1) * PAGE_SIZE;
 

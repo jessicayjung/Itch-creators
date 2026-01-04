@@ -115,11 +115,13 @@ def cmd_score(args):
 
 
 def cmd_run(args):
-    """Run full pipeline: poll → backfill → enrich → score."""
+    """Run full pipeline: poll → discover → backfill → enrich → re-enrich → score."""
     with LogContext(logger, "Running full pipeline"):
         cmd_poll(args)
+        cmd_discover(args)
         cmd_backfill(args)
         cmd_enrich(args)
+        cmd_re_enrich(args)
         cmd_score(args)
 
     logger.info("Pipeline complete!")
