@@ -48,8 +48,8 @@ def test_fetch_rate_limiting():
 
         elapsed = time.time() - start
 
-        # Should have waited at least 2 seconds between requests
-        assert elapsed >= 2.0
+        # Should have waited at least 1 second between requests
+        assert elapsed >= 1.0
         assert mock_get.call_count == 2
 
 

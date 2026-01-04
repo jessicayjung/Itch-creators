@@ -119,7 +119,8 @@ def test_enrich_all_with_errors():
                  date(2024, 1, 3), None, 0, 0, None, None, None)
 
     with patch("src.enricher.db.get_unenriched_games") as mock_get_games, \
-         patch("src.enricher.enrich_game") as mock_enrich_game:
+         patch("src.enricher.enrich_game") as mock_enrich_game, \
+         patch("src.enricher.db.mark_game_failed") as mock_mark_failed:
 
         mock_get_games.return_value = [game1, game2, game3]
         # First succeeds, second fails, third succeeds
@@ -129,6 +130,8 @@ def test_enrich_all_with_errors():
 
         assert result["games_processed"] == 2  # Only successful ones
         assert result["errors"] == 1
+        # Failed game should be marked with cooldown
+        mock_mark_failed.assert_called_once_with(2)
 
 
 def test_enrich_all_no_games():
